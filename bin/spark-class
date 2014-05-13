@@ -87,6 +87,8 @@ fi
 SPARK_MEM=${SPARK_MEM:-512m}
 export SPARK_MEM
 
+SPARK_LIBRARY_PATH=$HADOOP_HOME/lib/native/:$SPARK_LIBRARY_PATH
+
 # Set JAVA_OPTS to be able to load native libraries and to set heap size
 JAVA_OPTS="$OUR_JAVA_OPTS"
 JAVA_OPTS="$JAVA_OPTS -Djava.library.path=$SPARK_LIBRARY_PATH"

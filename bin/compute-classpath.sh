@@ -64,6 +64,11 @@ if [[ $SPARK_TESTING == 1 ]]; then
   CLASSPATH="$CLASSPATH:$FWDIR/streaming/target/scala-$SCALA_VERSION/test-classes"
 fi
 
+if [ -d "$HADOOP_HOME/share/hadoop/mapreduce/lib/" ] ; then
+  HADOOP_MR_LZO_JAR=`ls $HADOOP_HOME/share/hadoop/mapreduce/lib/*lzo*.jar`
+  CLASSPATH=$CLASSPATH:$HADOOP_MR_LZO_JAR
+fi
+
 # Add hadoop conf dir if given -- otherwise FileSystem.*, etc fail !
 # Note, this assumes that there is either a HADOOP_CONF_DIR or YARN_CONF_DIR which hosts
 # the configurtion files.
