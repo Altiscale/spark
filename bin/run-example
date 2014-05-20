@@ -18,6 +18,10 @@
 #
 
 SCALA_VERSION=2.10
+SPARK_VERSION=1.0.0
+
+echo "WARN - SPARK_VERSION is hardcoded here to 1.0.0 due to the design of the original run-example script"
+echo "that doesn't honor the spark-env.sh settings. Update the version here manually if nessary."
 
 FWDIR="$(cd `dirname $0`/..; pwd)"
 export SPARK_HOME="$FWDIR"
@@ -25,8 +29,8 @@ EXAMPLES_DIR="$FWDIR"/examples
 
 if [ -f "$FWDIR/RELEASE" ]; then
   export SPARK_EXAMPLES_JAR=`ls "$FWDIR"/lib/spark-examples-*hadoop*.jar`
-elif [ -e "$EXAMPLES_DIR"/target/scala-$SCALA_VERSION/spark-examples-*hadoop*.jar ]; then
-  export SPARK_EXAMPLES_JAR=`ls "$EXAMPLES_DIR"/target/scala-$SCALA_VERSION/spark-examples-*hadoop*.jar`
+elif [ -e "$EXAMPLES_DIR"/target/spark-examples_${SCALA_VERSION}-${SPARK_VERSION}.jar ]; then
+  export SPARK_EXAMPLES_JAR=`ls "$EXAMPLES_DIR"/target/spark-examples_${SCALA_VERSION}-${SPARK_VERSION}.jar`
 fi
 
 if [[ -z $SPARK_EXAMPLES_JAR ]]; then
@@ -51,6 +55,8 @@ fi
 if [[ ! $EXAMPLE_CLASS == org.apache.spark.examples* ]]; then
   EXAMPLE_CLASS="org.apache.spark.examples.$EXAMPLE_CLASS"
 fi
+
+echo "SPARK_EXAMPLES_JAR=$SPARK_EXAMPLES_JAR"
 
 ./bin/spark-submit \
   --master $EXAMPLE_MASTER \
