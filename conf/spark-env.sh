@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+##########################################################################
+# WARNING: STANDALONE and MESOS are NOT supported in your Infrastructure #
+##########################################################################
+
 JAVA_HOME=/usr/java/default
 
 # This file is sourced when running various Spark programs.
