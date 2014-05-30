@@ -965,6 +965,8 @@
       <id>hadoop-2.2</id>
       <properties>
         <protobuf.version>2.5.0</protobuf.version>
+        <hadoop.version>2.2.0</hadoop.version>
+        <yarn.version>2.2.0</yarn.version>
       </properties>
     </profile>
 
