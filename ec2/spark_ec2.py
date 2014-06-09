@@ -201,7 +201,12 @@ def get_spark_ami(opts):
     "c3.xlarge":   "pvm",
     "c3.2xlarge":  "pvm",
     "c3.4xlarge":  "pvm",
-    "c3.8xlarge":  "pvm"
+    "c3.8xlarge":  "pvm",
+    "r3.large":    "hvm",
+    "r3.xlarge":   "hvm",
+    "r3.2xlarge":  "hvm",
+    "r3.4xlarge":  "hvm",
+    "r3.8xlarge":  "hvm"
   }
   if opts.instance_type in instance_types:
     instance_type = instance_types[opts.instance_type]
@@ -444,7 +449,7 @@ def setup_cluster(conn, master_nodes, slave_nodes, opts, deploy_ssh_key):
 
   # NOTE: We should clone the repository before running deploy_files to
   # prevent ec2-variables.sh from being overwritten
-  ssh(master, opts, "rm -rf spark-ec2 && git clone https://github.com/mesos/spark-ec2.git -b v2")
+  ssh(master, opts, "rm -rf spark-ec2 && git clone https://github.com/mesos/spark-ec2.git -b v3")
 
   print "Deploying files to master..."
   deploy_files(conn, "deploy.generic", opts, master_nodes, slave_nodes, modules)
@@ -507,7 +512,12 @@ def get_num_disks(instance_type):
     "c3.xlarge":   2,
     "c3.2xlarge":  2,
     "c3.4xlarge":  2,
-    "c3.8xlarge":  2
+    "c3.8xlarge":  2,
+    "r3.large":    1,
+    "r3.xlarge":   1,
+    "r3.2xlarge":  1,
+    "r3.4xlarge":  1,
+    "r3.8xlarge":  2
   }
   if instance_type in disks_by_instance:
     return disks_by_instance[instance_type]

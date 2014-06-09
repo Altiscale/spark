@@ -17,15 +17,17 @@
 
 package org.apache.spark
 
+import scala.language.implicitConversions
+
 import java.io._
 import java.net.URI
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Properties, UUID}
 import java.util.UUID.randomUUID
 import scala.collection.{Map, Set}
+import scala.collection.JavaConversions._
 import scala.collection.generic.Growable
-import scala.collection.mutable.{ArrayBuffer, HashMap}
-import scala.language.implicitConversions
+import scala.collection.mutable.HashMap
 import scala.reflect.{ClassTag, classTag}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
@@ -65,11 +67,17 @@ class SparkContext(config: SparkConf) extends Logging {
   private[spark] var preferredNodeLocationData: Map[String, Set[SplitInfo]] = Map()
 
   /**
+   * Create a SparkContext that loads settings from system properties (for instance, when
+   * launching with ./bin/spark-submit).
+   */
+  def this() = this(new SparkConf())
+
+  /**
    * :: DeveloperApi ::
    * Alternative constructor for setting preferred locations where Spark will create executors.
    *
-   * @param preferredNodeLocationData used in YARN mode to select nodes to launch containers on. Ca
-   * be generated using [[org.apache.spark.scheduler.InputFormatInfo.computePreferredLocations]]
+   * @param preferredNodeLocationData used in YARN mode to select nodes to launch containers on.
+   * Can be generated using [[org.apache.spark.scheduler.InputFormatInfo.computePreferredLocations]]
    * from a list of input files or InputFormats for the application.
    */
   @DeveloperApi
@@ -710,7 +718,7 @@ class SparkContext(config: SparkConf) extends Logging {
       minPartitions: Int = defaultMinPartitions
       ): RDD[T] = {
     sequenceFile(path, classOf[NullWritable], classOf[BytesWritable], minPartitions)
-      .flatMap(x => Utils.deserialize[Array[T]](x._2.getBytes))
+      .flatMap(x => Utils.deserialize[Array[T]](x._2.getBytes, Utils.getContextOrSparkClassLoader))
   }
 
   protected[spark] def checkpointFile[T: ClassTag](
@@ -786,7 +794,7 @@ class SparkContext(config: SparkConf) extends Logging {
     addedFiles(key) = System.currentTimeMillis
 
     // Fetch the file locally in case a job is executed using DAGScheduler.runLocally().
-    Utils.fetchFile(path, new File(SparkFiles.getRootDirectory), conf, env.securityManager)
+    Utils.fetchFile(path, new File(SparkFiles.getRootDirectory()), conf, env.securityManager)
 
     logInfo("Added file " + path + " at " + key + " with timestamp " + addedFiles(key))
     postEnvironmentUpdate()
@@ -836,18 +844,22 @@ class SparkContext(config: SparkConf) extends Logging {
   }
 
   /**
-   *  Return pools for fair scheduler
-   *  TODO(xiajunluan): We should take nested pools into account
+   * :: DeveloperApi ::
+   * Return pools for fair scheduler
    */
-  def getAllPools: ArrayBuffer[Schedulable] = {
-    taskScheduler.rootPool.schedulableQueue
+  @DeveloperApi
+  def getAllPools: Seq[Schedulable] = {
+    // TODO(xiajunluan): We should take nested pools into account
+    taskScheduler.rootPool.schedulableQueue.toSeq
   }
 
   /**
+   * :: DeveloperApi ::
    * Return the pool associated with the given name, if one exists
    */
+  @DeveloperApi
   def getPoolForName(pool: String): Option[Schedulable] = {
-    taskScheduler.rootPool.schedulableNameToSchedulable.get(pool)
+    Option(taskScheduler.rootPool.schedulableNameToSchedulable.get(pool))
   }
 
   /**
@@ -920,13 +932,12 @@ class SparkContext(config: SparkConf) extends Logging {
               try {
                 env.httpFileServer.addJar(new File(fileName))
               } catch {
-                case e: Exception => {
+                case e: Exception =>
                   // For now just log an error but allow to go through so spark examples work.
                   // The spark examples don't really need the jar distributed since its also
                   // the app jar.
                   logError("Error adding jar (" + e + "), was the --addJars option used?")
                   null
-                }
               }
             } else {
               env.httpFileServer.addJar(new File(uri.getPath))
