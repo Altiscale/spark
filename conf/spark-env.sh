@@ -19,6 +19,7 @@ SPARK_VERSION=1.0.0
 HADOOP_HOME=/opt/hadoop/
 # - HADOOP_CONF_DIR, to point Spark towards Hadoop configuration files
 HADOOP_CONF_DIR=/etc/hadoop/
+YARN_CONF_DIR=/etc/hadoop/
 # - SPARK_EXECUTOR_INSTANCES, Number of workers to start (Default: 2)
 # - SPARK_EXECUTOR_CORES, Number of cores for the workers (Default: 1).
 # - SPARK_EXECUTOR_MEMORY, Memory per Worker (e.g. 1000M, 2G) (Default: 1G)
