@@ -359,8 +359,7 @@ Apart from text files, Spark's Java API also supports several other data formats
 
 <div data-lang="python"  markdown="1">
 
-PySpark can create distributed datasets from any file system supported by Hadoop, including your local file system, HDFS, KFS, [Amazon S3](http://wiki.apache.org/hadoop/AmazonS3), etc.
-The current API is limited to text files, but support for binary Hadoop InputFormats is expected in future versions.
+PySpark can create distributed datasets from any storage source supported by Hadoop, including your local file system, HDFS, Cassandra, HBase, [Amazon S3](http://wiki.apache.org/hadoop/AmazonS3), etc. Spark supports text files, [SequenceFiles](http://hadoop.apache.org/common/docs/current/api/org/apache/hadoop/mapred/SequenceFileInputFormat.html), and any other Hadoop [InputFormat](http://hadoop.apache.org/docs/stable/api/org/apache/hadoop/mapred/InputFormat.html).
 
 Text file RDDs can be created using `SparkContext`'s `textFile` method. This method takes an URI for the file (either a local path on the machine, or a `hdfs://`, `s3n://`, etc URI) and reads it as a collection of lines. Here is an example invocation:
 
@@ -378,11 +377,84 @@ Some notes on reading files with Spark:
 
 * The `textFile` method also takes an optional second argument for controlling the number of slices of the file. By default, Spark creates one slice for each block of the file (blocks being 64MB by default in HDFS), but you can also ask for a higher number of slices by passing a larger value. Note that you cannot have fewer slices than blocks.
 
-Apart reading files as a collection of lines,
+Apart from text files, Spark's Python API also supports several other data formats:
 
 * `SparkContext.wholeTextFiles` lets you read a directory containing multiple small text files, and returns each of them as (filename, content) pairs. This is in contrast with `textFile`, which would return one record per line in each file.
 
 * `RDD.saveAsPickleFile` and `SparkContext.pickleFile` support saving an RDD in a simple format consisting of pickled Python objects. Batching is used on pickle serialization, with default batch size 10.
+
+* SequenceFile and Hadoop Input/Output Formats
+
+**Note** this feature is currently marked ```Experimental``` and is intended for advanced users. It may be replaced in future with read/write support based on SparkSQL, in which case SparkSQL is the preferred approach.
+
+**Writable Support**
+
+PySpark SequenceFile support loads an RDD of key-value pairs within Java, converts Writables to base Java types, and pickles the 
+resulting Java objects using [Pyrolite](https://github.com/irmen/Pyrolite/). When saving an RDD of key-value pairs to SequenceFile, 
+PySpark does the reverse. It unpickles Python objects into Java objects and then converts them to Writables. The following 
+Writables are automatically converted:
+
+<table class="table">
+<tr><th>Writable Type</th><th>Python Type</th></tr>
+<tr><td>Text</td><td>unicode str</td></tr>
+<tr><td>IntWritable</td><td>int</td></tr>
+<tr><td>FloatWritable</td><td>float</td></tr>
+<tr><td>DoubleWritable</td><td>float</td></tr>
+<tr><td>BooleanWritable</td><td>bool</td></tr>
+<tr><td>BytesWritable</td><td>bytearray</td></tr>
+<tr><td>NullWritable</td><td>None</td></tr>
+<tr><td>MapWritable</td><td>dict</td></tr>
+</table>
+
+Arrays are not handled out-of-the-box. Users need to specify custom `ArrayWritable` subtypes when reading or writing. When writing, 
+users also need to specify custom converters that convert arrays to custom `ArrayWritable` subtypes. When reading, the default 
+converter will convert custom `ArrayWritable` subtypes to Java `Object[]`, which then get pickled to Python tuples. To get 
+Python `array.array` for arrays of primitive types, users need to specify custom converters.
+
+**Saving and Loading SequenceFiles**
+
+Similarly to text files, SequenceFiles can be saved and loaded by specifying the path. The key and value
+classes can be specified, but for standard Writables this is not required.
+
+{% highlight python %}
+>>> rdd = sc.parallelize(range(1, 4)).map(lambda x: (x, "a" * x ))
+>>> rdd.saveAsSequenceFile("path/to/file")
+>>> sorted(sc.sequenceFile("path/to/file").collect())
+[(1, u'a'), (2, u'aa'), (3, u'aaa')]
+{% endhighlight %}
+
+**Saving and Loading Other Hadoop Input/Output Formats**
+
+PySpark can also read any Hadoop InputFormat or write any Hadoop OutputFormat, for both 'new' and 'old' Hadoop MapReduce APIs. 
+If required, a Hadoop configuration can be passed in as a Python dict. Here is an example using the
+Elasticsearch ESInputFormat:
+
+{% highlight python %}
+$ SPARK_CLASSPATH=/path/to/elasticsearch-hadoop.jar ./bin/pyspark
+>>> conf = {"es.resource" : "index/type"}   # assume Elasticsearch is running on localhost defaults
+>>> rdd = sc.newAPIHadoopRDD("org.elasticsearch.hadoop.mr.EsInputFormat",\
+    "org.apache.hadoop.io.NullWritable", "org.elasticsearch.hadoop.mr.LinkedMapWritable", conf=conf)
+>>> rdd.first()         # the result is a MapWritable that is converted to a Python dict
+(u'Elasticsearch ID',
+ {u'field1': True,
+  u'field2': u'Some Text',
+  u'field3': 12345})
+{% endhighlight %}
+
+Note that, if the InputFormat simply depends on a Hadoop configuration and/or input path, and
+the key and value classes can easily be converted according to the above table,
+then this approach should work well for such cases.
+
+If you have custom serialized binary data (such as loading data from Cassandra / HBase), then you will first need to 
+transform that data on the Scala/Java side to something which can be handled by Pyrolite's pickler.
+A [Converter](api/scala/index.html#org.apache.spark.api.python.Converter) trait is provided 
+for this. Simply extend this trait and implement your transformation code in the ```convert``` 
+method. Remember to ensure that this class, along with any dependencies required to access your ```InputFormat```, are packaged into your Spark job jar and included on the PySpark 
+classpath.
+
+See the [Python examples]({{site.SPARK_GITHUB_URL}}/tree/master/examples/src/main/python) and 
+the [Converter examples]({{site.SPARK_GITHUB_URL}}/tree/master/examples/src/main/scala/org/apache/spark/examples/pythonconverters) 
+for examples of using Cassandra / HBase ```InputFormat``` and ```OutputFormat``` with custom converters.
 
 </div>
 
@@ -661,7 +733,7 @@ def doStuff(self, rdd):
 
 While most Spark operations work on RDDs containing any type of objects, a few special operations are
 only available on RDDs of key-value pairs.
-The most common ones are distibuted "shuffle" operations, such as grouping or aggregating the elements
+The most common ones are distributed "shuffle" operations, such as grouping or aggregating the elements
 by a key.
 
 In Scala, these operations are automatically available on RDDs containing
@@ -695,7 +767,7 @@ documentation](http://docs.oracle.com/javase/7/docs/api/java/lang/Object.html#ha
 
 While most Spark operations work on RDDs containing any type of objects, a few special operations are
 only available on RDDs of key-value pairs.
-The most common ones are distibuted "shuffle" operations, such as grouping or aggregating the elements
+The most common ones are distributed "shuffle" operations, such as grouping or aggregating the elements
 by a key.
 
 In Java, key-value pairs are represented using the 
@@ -732,7 +804,7 @@ documentation](http://docs.oracle.com/javase/7/docs/api/java/lang/Object.html#ha
 
 While most Spark operations work on RDDs containing any type of objects, a few special operations are
 only available on RDDs of key-value pairs.
-The most common ones are distibuted "shuffle" operations, such as grouping or aggregating the elements
+The most common ones are distributed "shuffle" operations, such as grouping or aggregating the elements
 by a key.
 
 In Python, these operations work on RDDs containing built-in Python tuples such as `(1, 2)`.
@@ -824,6 +896,10 @@ for details.
   <td> When called on a dataset of (K, V) pairs, returns a dataset of (K, V) pairs where the values for each key are aggregated using the given reduce function <i>func</i>, which must be of type (V,V) => V. Like in <code>groupByKey</code>, the number of reduce tasks is configurable through an optional second argument. </td>
 </tr>
 <tr>
+  <td> <b>aggregateByKey</b>(<i>zeroValue</i>)(<i>seqOp</i>, <i>combOp</i>, [<i>numTasks</i>]) </td>
+  <td> When called on a dataset of (K, V) pairs, returns a dataset of (K, U) pairs where the values for each key are aggregated using the given combine functions and a neutral "zero" value. Allows an aggregated value type that is different than the input value type, while avoiding unnecessary allocations. Like in <code>groupByKey</code>, the number of reduce tasks is configurable through an optional second argument. </td>
+</tr>
+<tr>
   <td> <b>sortByKey</b>([<i>ascending</i>], [<i>numTasks</i>]) </td>
   <td> When called on a dataset of (K, V) pairs where K implements Ordered, returns a dataset of (K, V) pairs sorted by keys in ascending or descending order, as specified in the boolean <code>ascending</code> argument.</td>
 </tr>
@@ -893,8 +969,8 @@ for details.
   <td> Return an array with the first <i>n</i> elements of the dataset. Note that this is currently not executed in parallel. Instead, the driver program computes all the elements. </td>
 </tr>
 <tr>
-  <td> <b>takeSample</b>(<i>withReplacement</i>, <i>num</i>, <i>seed</i>) </td>
-  <td> Return an array with a random sample of <i>num</i> elements of the dataset, with or without replacement, using the given random number generator seed. </td>
+  <td> <b>takeSample</b>(<i>withReplacement</i>, <i>num</i>, [<i>seed</i>]) </td>
+  <td> Return an array with a random sample of <i>num</i> elements of the dataset, with or without replacement, optionally pre-specifying a random number generator seed.</td>
 </tr>
 <tr>
   <td> <b>takeOrdered</b>(<i>n</i>, <i>[ordering]</i>) </td>

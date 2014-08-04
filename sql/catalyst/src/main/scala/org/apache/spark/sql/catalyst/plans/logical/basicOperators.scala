@@ -104,6 +104,12 @@ case class Join(
   }
 }
 
+case class Except(left: LogicalPlan, right: LogicalPlan) extends BinaryNode {
+  def output = left.output
+
+  def references = Set.empty
+}
+
 case class InsertIntoTable(
     table: LogicalPlan,
     partition: Map[String, Option[String]],
@@ -171,7 +177,7 @@ case class LowerCaseSchema(child: LogicalPlan) extends UnaryNode {
     case StructType(fields) =>
       StructType(fields.map(f =>
         StructField(f.name.toLowerCase(), lowerCaseSchema(f.dataType), f.nullable)))
-    case ArrayType(elemType) => ArrayType(lowerCaseSchema(elemType))
+    case ArrayType(elemType, containsNull) => ArrayType(lowerCaseSchema(elemType), containsNull)
     case otherType => otherType
   }
 
@@ -203,4 +209,9 @@ case class Distinct(child: LogicalPlan) extends UnaryNode {
 
 case object NoRelation extends LeafNode {
   override def output = Nil
+}
+
+case class Intersect(left: LogicalPlan, right: LogicalPlan) extends BinaryNode {
+  override def output = left.output
+  override def references = Set.empty
 }

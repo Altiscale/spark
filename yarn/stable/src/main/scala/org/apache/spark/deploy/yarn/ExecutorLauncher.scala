@@ -19,22 +19,21 @@ package org.apache.spark.deploy.yarn
 
 import java.net.Socket
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.net.NetUtils
-import org.apache.hadoop.yarn.api._
+import org.apache.hadoop.yarn.api.ApplicationConstants
 import org.apache.hadoop.yarn.api.records._
 import org.apache.hadoop.yarn.api.protocolrecords._
 import org.apache.hadoop.yarn.conf.YarnConfiguration
-import org.apache.hadoop.yarn.util.{ConverterUtils, Records}
 import akka.actor._
 import akka.remote._
-import akka.actor.Terminated
 import org.apache.spark.{Logging, SecurityManager, SparkConf}
 import org.apache.spark.util.{Utils, AkkaUtils}
 import org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend
+import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.AddWebUIFilter
 import org.apache.spark.scheduler.SplitInfo
 import org.apache.hadoop.yarn.client.api.AMRMClient
 import org.apache.hadoop.yarn.client.api.AMRMClient.ContainerRequest
 import org.apache.spark.deploy.SparkHadoopUtil
+import org.apache.hadoop.yarn.webapp.util.WebAppUtils
 
 /**
  * An application master that allocates executors on behalf of a driver that is running outside
@@ -55,9 +54,15 @@ class ExecutorLauncher(args: ApplicationMasterArguments, conf: Configuration, sp
   private val yarnConf: YarnConfiguration = new YarnConfiguration(conf)
 
   private var yarnAllocator: YarnAllocationHandler = _
-  private var driverClosed:Boolean = false
+  private var driverClosed: Boolean = false
+  private var isFinished: Boolean = false
+  private var registered: Boolean = false
 
   private var amClient: AMRMClient[ContainerRequest] = _
+
+  // Default to numExecutors * 2, with minimum of 3
+  private val maxNumExecutorFailures = sparkConf.getInt("spark.yarn.max.executor.failures",
+    sparkConf.getInt("spark.yarn.max.worker.failures", math.max(args.numExecutors * 2, 3)))
 
   val securityManager = new SecurityManager(sparkConf)
   val actorSystem: ActorSystem = AkkaUtils.createActorSystem("sparkYarnAM", Utils.localHostName, 0,
@@ -72,8 +77,8 @@ class ExecutorLauncher(args: ApplicationMasterArguments, conf: Configuration, sp
     override def preStart() {
       logInfo("Listen to driver: " + driverUrl)
       driver = context.actorSelection(driverUrl)
-      // Send a hello message thus the connection is actually established,
-      // thus we can monitor Lifecycle Events.
+      // Send a hello message to establish the connection, after which
+      // we can monitor Lifecycle Events.
       driver ! "Hello"
       context.system.eventStream.subscribe(self, classOf[RemotingLifecycleEvent])
     }
@@ -82,6 +87,9 @@ class ExecutorLauncher(args: ApplicationMasterArguments, conf: Configuration, sp
       case x: DisassociatedEvent =>
         logInfo(s"Driver terminated or disconnected! Shutting down. $x")
         driverClosed = true
+      case x: AddWebUIFilter =>
+        logInfo(s"Add WebUI Filter. $x")
+        driver ! x
     }
   }
 
@@ -95,10 +103,16 @@ class ExecutorLauncher(args: ApplicationMasterArguments, conf: Configuration, sp
     amClient.init(yarnConf)
     amClient.start()
 
-    appAttemptId = getApplicationAttemptId()
-    registerApplicationMaster()
+    appAttemptId = ApplicationMaster.getApplicationAttemptId()
+    synchronized {
+      if (!isFinished) {
+        registerApplicationMaster()
+        registered = true
+      }
+    }
 
     waitForSparkMaster()
+    addAmIpFilter()
 
     // Allocate all containers
     allocateExecutors()
@@ -141,19 +155,21 @@ class ExecutorLauncher(args: ApplicationMasterArguments, conf: Configuration, sp
     }
   }
 
-  private def getApplicationAttemptId(): ApplicationAttemptId = {
-    val envs = System.getenv()
-    val containerIdString = envs.get(ApplicationConstants.Environment.CONTAINER_ID.name())
-    val containerId = ConverterUtils.toContainerId(containerIdString)
-    val appAttemptId = containerId.getApplicationAttemptId()
-    logInfo("ApplicationAttemptId: " + appAttemptId)
-    appAttemptId
+  private def registerApplicationMaster(): RegisterApplicationMasterResponse = {
+    val appUIAddress = sparkConf.get("spark.driver.appUIAddress", "")
+    logInfo(s"Registering the ApplicationMaster with appUIAddress: $appUIAddress")
+    amClient.registerApplicationMaster(Utils.localHostName(), 0, appUIAddress)
   }
 
-  private def registerApplicationMaster(): RegisterApplicationMasterResponse = {
-    logInfo("Registering the ApplicationMaster")
-    // TODO:(Raymond) Find out Spark UI address and fill in here?
-    amClient.registerApplicationMaster(Utils.localHostName(), 0, "")
+  // add the yarn amIpFilter that Yarn requires for properly securing the UI
+  private def addAmIpFilter() {
+    val proxy = WebAppUtils.getProxyHostAndPort(conf)
+    val parts = proxy.split(":")
+    val proxyBase = System.getenv(ApplicationConstants.APPLICATION_WEB_PROXY_BASE_ENV)
+    val uriBase = "http://" + proxy + proxyBase
+    val amFilter = "PROXY_HOST=" + parts(0) + "," + "PROXY_URI_BASE=" + uriBase
+    val amFilterName = "org.apache.hadoop.yarn.server.webproxy.amfilter.AmIpFilter"
+    actor ! AddWebUIFilter(amFilterName, amFilter, proxyBase)
   }
 
   private def waitForSparkMaster() {
@@ -185,8 +201,7 @@ class ExecutorLauncher(args: ApplicationMasterArguments, conf: Configuration, sp
 
 
   private def allocateExecutors() {
-
-    // Fixme: should get preferredNodeLocationData from SparkContext, just fake a empty one for now.
+    // TODO: should get preferredNodeLocationData from SparkContext, just fake a empty one for now.
     val preferredNodeLocationData: scala.collection.Map[String, scala.collection.Set[SplitInfo]] =
       scala.collection.immutable.Map()
 
@@ -198,11 +213,12 @@ class ExecutorLauncher(args: ApplicationMasterArguments, conf: Configuration, sp
       preferredNodeLocationData,
       sparkConf)
 
-    logInfo("Allocating " + args.numExecutors + " executors.")
-    // Wait until all containers have finished
+    logInfo("Requesting " + args.numExecutors + " executors.")
+    // Wait until all containers have launched
     yarnAllocator.addResourceRequests(args.numExecutors)
     yarnAllocator.allocateResources()
     while ((yarnAllocator.getNumExecutorsRunning < args.numExecutors) && (!driverClosed)) {
+      checkNumExecutorsFailed()
       allocateMissingExecutor()
       yarnAllocator.allocateResources()
       Thread.sleep(100)
@@ -221,15 +237,23 @@ class ExecutorLauncher(args: ApplicationMasterArguments, conf: Configuration, sp
     }
   }
 
-  // TODO: We might want to extend this to allocate more containers in case they die !
+  private def checkNumExecutorsFailed() {
+    if (yarnAllocator.getNumExecutorsFailed >= maxNumExecutorFailures) {
+      finishApplicationMaster(FinalApplicationStatus.FAILED,
+        "max number of executor failures reached")
+    }
+  }
+
   private def launchReporterThread(_sleepTime: Long): Thread = {
     val sleepTime = if (_sleepTime <= 0) 0 else _sleepTime
 
     val t = new Thread {
       override def run() {
         while (!driverClosed) {
+          checkNumExecutorsFailed()
           allocateMissingExecutor()
-          sendProgress()
+          logDebug("Sending progress")
+          yarnAllocator.allocateResources()
           Thread.sleep(sleepTime)
         }
       }
@@ -241,20 +265,21 @@ class ExecutorLauncher(args: ApplicationMasterArguments, conf: Configuration, sp
     t
   }
 
-  private def sendProgress() {
-    logDebug("Sending progress")
-    // simulated with an allocate request with no nodes requested ...
-    yarnAllocator.allocateResources()
-  }
-
-  def finishApplicationMaster(status: FinalApplicationStatus) {
-    logInfo("finish ApplicationMaster with " + status)
-    val trackingUrl = sparkConf.get("spark.yarn.historyServer.address", "")
-    amClient.unregisterApplicationMaster(status, "" /* appMessage */ , trackingUrl)
+  def finishApplicationMaster(status: FinalApplicationStatus, appMessage: String = "") {
+    synchronized {
+      if (isFinished) {
+        return
+      }
+      logInfo("Unregistering ApplicationMaster with " + status)
+      if (registered) {
+        val trackingUrl = sparkConf.get("spark.yarn.historyServer.address", "")
+        amClient.unregisterApplicationMaster(status, appMessage, trackingUrl)
+      }
+      isFinished = true
+    }
   }
 
 }
-
 
 object ExecutorLauncher {
   def main(argStrings: Array[String]) {

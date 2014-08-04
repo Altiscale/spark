@@ -18,6 +18,7 @@
 package org.apache.spark
 
 import java.io.File
+import java.net.Socket
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable
@@ -34,6 +35,7 @@ import org.apache.spark.metrics.MetricsSystem
 import org.apache.spark.network.ConnectionManager
 import org.apache.spark.scheduler.LiveListenerBus
 import org.apache.spark.serializer.Serializer
+import org.apache.spark.shuffle.ShuffleManager
 import org.apache.spark.storage._
 import org.apache.spark.util.{AkkaUtils, Utils}
 
@@ -56,7 +58,7 @@ class SparkEnv (
     val closureSerializer: Serializer,
     val cacheManager: CacheManager,
     val mapOutputTracker: MapOutputTracker,
-    val shuffleFetcher: ShuffleFetcher,
+    val shuffleManager: ShuffleManager,
     val broadcastManager: BroadcastManager,
     val blockManager: BlockManager,
     val connectionManager: ConnectionManager,
@@ -66,7 +68,7 @@ class SparkEnv (
     val metricsSystem: MetricsSystem,
     val conf: SparkConf) extends Logging {
 
-  // A mapping of thread ID to amount of memory used for shuffle in bytes
+  // A mapping of thread ID to amount of memory, in bytes, used for shuffle aggregations
   // All accesses should be manually synchronized
   val shuffleMemoryMap = mutable.HashMap[Long, Long]()
 
@@ -78,9 +80,9 @@ class SparkEnv (
 
   private[spark] def stop() {
     pythonWorkers.foreach { case(key, worker) => worker.stop() }
-    httpFileServer.stop()
+    Option(httpFileServer).foreach(_.stop())
     mapOutputTracker.stop()
-    shuffleFetcher.stop()
+    shuffleManager.stop()
     broadcastManager.stop()
     blockManager.stop()
     blockManager.master.stop()
@@ -101,10 +103,10 @@ class SparkEnv (
   }
 
   private[spark]
-  def destroyPythonWorker(pythonExec: String, envVars: Map[String, String]) {
+  def destroyPythonWorker(pythonExec: String, envVars: Map[String, String], worker: Socket) {
     synchronized {
       val key = (pythonExec, envVars)
-      pythonWorkers(key).stop()
+      pythonWorkers.get(key).foreach(_.stopWorker(worker))
     }
   }
 }
@@ -163,18 +165,26 @@ object SparkEnv extends Logging {
     def instantiateClass[T](propertyName: String, defaultClassName: String): T = {
       val name = conf.get(propertyName,  defaultClassName)
       val cls = Class.forName(name, true, Utils.getContextOrSparkClassLoader)
-      // First try with the constructor that takes SparkConf. If we can't find one,
-      // use a no-arg constructor instead.
+      // Look for a constructor taking a SparkConf and a boolean isDriver, then one taking just
+      // SparkConf, then one taking no arguments
       try {
-        cls.getConstructor(classOf[SparkConf]).newInstance(conf).asInstanceOf[T]
+        cls.getConstructor(classOf[SparkConf], java.lang.Boolean.TYPE)
+          .newInstance(conf, new java.lang.Boolean(isDriver))
+          .asInstanceOf[T]
       } catch {
         case _: NoSuchMethodException =>
-            cls.getConstructor().newInstance().asInstanceOf[T]
+          try {
+            cls.getConstructor(classOf[SparkConf]).newInstance(conf).asInstanceOf[T]
+          } catch {
+            case _: NoSuchMethodException =>
+              cls.getConstructor().newInstance().asInstanceOf[T]
+          }
       }
     }
 
     val serializer = instantiateClass[Serializer](
       "spark.serializer", "org.apache.spark.serializer.JavaSerializer")
+    logDebug(s"Using serializer: ${serializer.getClass}")
 
     val closureSerializer = instantiateClass[Serializer](
       "spark.closure.serializer", "org.apache.spark.serializer.JavaSerializer")
@@ -184,13 +194,7 @@ object SparkEnv extends Logging {
         logInfo("Registering " + name)
         actorSystem.actorOf(Props(newActor), name = name)
       } else {
-        val driverHost: String = conf.get("spark.driver.host", "localhost")
-        val driverPort: Int = conf.getInt("spark.driver.port", 7077)
-        Utils.checkHost(driverHost, "Expected hostname")
-        val url = s"akka.tcp://spark@$driverHost:$driverPort/user/$name"
-        val timeout = AkkaUtils.lookupTimeout(conf)
-        logInfo(s"Connecting to $name: $url")
-        Await.result(actorSystem.actorSelection(url).resolveOne(timeout), timeout)
+        AkkaUtils.makeDriverRef(name, conf, actorSystem)
       }
     }
 
@@ -219,12 +223,15 @@ object SparkEnv extends Logging {
 
     val cacheManager = new CacheManager(blockManager)
 
-    val shuffleFetcher = instantiateClass[ShuffleFetcher](
-      "spark.shuffle.fetcher", "org.apache.spark.BlockStoreShuffleFetcher")
-
-    val httpFileServer = new HttpFileServer(securityManager)
-    httpFileServer.initialize()
-    conf.set("spark.fileserver.uri",  httpFileServer.serverUri)
+    val httpFileServer =
+      if (isDriver) {
+        val server = new HttpFileServer(securityManager)
+        server.initialize()
+        conf.set("spark.fileserver.uri",  server.serverUri)
+        server
+      } else {
+        null
+      }
 
     val metricsSystem = if (isDriver) {
       MetricsSystem.createMetricsSystem("driver", conf, securityManager)
@@ -242,6 +249,9 @@ object SparkEnv extends Logging {
       "."
     }
 
+    val shuffleManager = instantiateClass[ShuffleManager](
+      "spark.shuffle.manager", "org.apache.spark.shuffle.hash.HashShuffleManager")
+
     // Warn about deprecated spark.cache.class property
     if (conf.contains("spark.cache.class")) {
       logWarning("The spark.cache.class property is no longer being used! Specify storage " +
@@ -255,7 +265,7 @@ object SparkEnv extends Logging {
       closureSerializer,
       cacheManager,
       mapOutputTracker,
-      shuffleFetcher,
+      shuffleManager,
       broadcastManager,
       blockManager,
       connectionManager,
@@ -278,10 +288,11 @@ object SparkEnv extends Logging {
       addedJars: Seq[String],
       addedFiles: Seq[String]): Map[String, Seq[(String, String)]] = {
 
+    import Properties._
     val jvmInformation = Seq(
-      ("Java Version", "%s (%s)".format(Properties.javaVersion, Properties.javaVendor)),
-      ("Java Home", Properties.javaHome),
-      ("Scala Version", Properties.versionString)
+      ("Java Version", s"$javaVersion ($javaVendor)"),
+      ("Java Home", javaHome),
+      ("Scala Version", versionString)
     ).sorted
 
     // Spark properties
@@ -296,18 +307,15 @@ object SparkEnv extends Logging {
 
     // System properties that are not java classpaths
     val systemProperties = System.getProperties.iterator.toSeq
-    val otherProperties = systemProperties.filter { case (k, v) =>
+    val otherProperties = systemProperties.filter { case (k, _) =>
       k != "java.class.path" && !k.startsWith("spark.")
     }.sorted
 
     // Class paths including all added jars and files
-    val classPathProperty = systemProperties.find { case (k, v) =>
-      k == "java.class.path"
-    }.getOrElse(("", ""))
-    val classPathEntries = classPathProperty._2
+    val classPathEntries = javaClassPath
       .split(File.pathSeparator)
-      .filterNot(e => e.isEmpty)
-      .map(e => (e, "System Classpath"))
+      .filterNot(_.isEmpty)
+      .map((_, "System Classpath"))
     val addedJarsAndFiles = (addedJars ++ addedFiles).map((_, "Added By User"))
     val classPaths = (addedJarsAndFiles ++ classPathEntries).sorted
 

@@ -23,12 +23,14 @@ import akka.actor.ActorRef
 import com.google.common.base.Charsets
 import com.google.common.io.Files
 
-import org.apache.spark.Logging
+import org.apache.spark.{SparkConf, Logging}
 import org.apache.spark.deploy.{ApplicationDescription, Command, ExecutorState}
 import org.apache.spark.deploy.DeployMessages.ExecutorStateChanged
+import org.apache.spark.util.logging.FileAppender
 
 /**
  * Manages the execution of one executor process.
+ * This is currently only used in standalone mode.
  */
 private[spark] class ExecutorRunner(
     val appId: String,
@@ -42,12 +44,15 @@ private[spark] class ExecutorRunner(
     val sparkHome: File,
     val workDir: File,
     val workerUrl: String,
+    val conf: SparkConf,
     var state: ExecutorState.Value)
   extends Logging {
 
   val fullId = appId + "/" + execId
   var workerThread: Thread = null
   var process: Process = null
+  var stdoutAppender: FileAppender = null
+  var stderrAppender: FileAppender = null
 
   // NOTE: This is now redundant with the automated shut-down enforced by the Executor. It might
   // make sense to remove this in the future.
@@ -68,7 +73,7 @@ private[spark] class ExecutorRunner(
   }
 
   /**
-   * kill executor process, wait for exit and notify worker to update resource status
+   * Kill executor process, wait for exit and notify worker to update resource status.
    *
    * @param message the exception message which caused the executor's death 
    */
@@ -77,7 +82,14 @@ private[spark] class ExecutorRunner(
     if (process != null) {
       logInfo("Killing process!")
       process.destroy()
-      val exitCode = Some(process.waitFor())
+      process.waitFor()
+      if (stdoutAppender != null) {
+        stdoutAppender.stop()
+      }
+      if (stderrAppender != null) {
+        stderrAppender.stop()
+      }
+      exitCode = Some(process.waitFor())
     }
     worker ! ExecutorStateChanged(appId, execId, state, message, exitCode)
   }
@@ -103,10 +115,13 @@ private[spark] class ExecutorRunner(
   }
 
   def getCommandSeq = {
-    val command = Command(appDesc.command.mainClass,
-      appDesc.command.arguments.map(substituteVariables) ++ Seq(appId), appDesc.command.environment,
-      appDesc.command.classPathEntries, appDesc.command.libraryPathEntries,
-      appDesc.command.extraJavaOptions)
+    val command = Command(
+      appDesc.command.mainClass,
+      appDesc.command.arguments.map(substituteVariables) ++ Seq(appId),
+      appDesc.command.environment,
+      appDesc.command.classPathEntries,
+      appDesc.command.libraryPathEntries,
+      appDesc.command.javaOpts)
     CommandUtils.buildCommandSeq(command, memory, sparkHome.getAbsolutePath)
   }
 
@@ -138,11 +153,11 @@ private[spark] class ExecutorRunner(
 
       // Redirect its stdout and stderr to files
       val stdout = new File(executorDir, "stdout")
-      CommandUtils.redirectStream(process.getInputStream, stdout)
+      stdoutAppender = FileAppender(process.getInputStream, stdout, conf)
 
       val stderr = new File(executorDir, "stderr")
       Files.write(header, stderr, Charsets.UTF_8)
-      CommandUtils.redirectStream(process.getErrorStream, stderr)
+      stderrAppender = FileAppender(process.getErrorStream, stderr, conf)
 
       // Wait for it to exit; executor may exit with code 0 (when driver instructs it to shutdown)
       // or with nonzero exit code
