@@ -124,6 +124,7 @@
     <protobuf.version>2.5.0</protobuf.version>
     <yarn.version>${hadoop.version}</yarn.version>
     <hbase.version>0.94.6</hbase.version>
+    <flume.version>1.4.0</flume.version>
     <zookeeper.version>3.4.5</zookeeper.version>
     <hive.version>0.12.0</hive.version>
     <parquet.version>1.4.3</parquet.version>
@@ -1086,6 +1087,7 @@
       <id>hadoop-2.3</id>
       <properties>
         <hadoop.version>2.3.0</hadoop.version>
+        <yarn.version>2.3.0</yarn.version>
         <protobuf.version>2.5.0</protobuf.version>
         <jets3t.version>0.9.0</jets3t.version>
       </properties>
@@ -1095,6 +1097,7 @@
       <id>hadoop-2.4</id>
       <properties>
         <hadoop.version>2.4.1</hadoop.version>
+        <yarn.version>2.4.1</yarn.version>
         <protobuf.version>2.5.0</protobuf.version>
         <jets3t.version>0.9.0</jets3t.version>
       </properties>
