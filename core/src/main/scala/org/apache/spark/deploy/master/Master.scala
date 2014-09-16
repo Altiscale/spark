@@ -295,34 +295,28 @@ private[spark] class Master(
       val execOption = idToApp.get(appId).flatMap(app => app.executors.get(execId))
       execOption match {
         case Some(exec) => {
-          val appInfo = idToApp(appId)
           exec.state = state
-          if (state == ExecutorState.RUNNING) { appInfo.resetRetryCount() }
           exec.application.driver ! ExecutorUpdated(execId, state, message, exitStatus)
           if (ExecutorState.isFinished(state)) {
+            val appInfo = idToApp(appId)
             // Remove this executor from the worker and app
-            logInfo(s"Removing executor ${exec.fullId} because it is $state")
+            logInfo("Removing executor " + exec.fullId + " because it is " + state)
             appInfo.removeExecutor(exec)
             exec.worker.removeExecutor(exec)
 
-            val normalExit = exitStatus == Some(0)
+            val normalExit = exitStatus.exists(_ == 0)
             // Only retry certain number of times so we don't go into an infinite loop.
-            if (!normalExit) {
-              if (appInfo.incrementRetryCount() < ApplicationState.MAX_NUM_RETRY) {
-                schedule()
-              } else {
-                val execs = appInfo.executors.values
-                if (!execs.exists(_.state == ExecutorState.RUNNING)) {
-                  logError(s"Application ${appInfo.desc.name} with ID ${appInfo.id} failed " +
-                    s"${appInfo.retryCount} times; removing it")
-                  removeApplication(appInfo, ApplicationState.FAILED)
-                }
-              }
+            if (!normalExit && appInfo.incrementRetryCount < ApplicationState.MAX_NUM_RETRY) {
+              schedule()
+            } else if (!normalExit) {
+              logError("Application %s with ID %s failed %d times, removing it".format(
+                appInfo.desc.name, appInfo.id, appInfo.retryCount))
+              removeApplication(appInfo, ApplicationState.FAILED)
             }
           }
         }
         case None =>
-          logWarning(s"Got status update for unknown executor $appId/$execId")
+          logWarning("Got status update for unknown executor " + appId + "/" + execId)
       }
     }
 

@@ -50,8 +50,7 @@ while (( "$#" )); do
   case $1 in
     --hadoop)
       echo "Error: '--hadoop' is no longer supported:"
-      echo "Error: use Maven profiles and options -Dhadoop.version and -Dyarn.version instead."
-      echo "Error: Related profiles include hadoop-0.23, hdaoop-2.2, hadoop-2.3 and hadoop-2.4."
+      echo "Error: use Maven options -Phadoop.version and -Pyarn.version"
       exit_with_usage
       ;;
     --with-yarn)
