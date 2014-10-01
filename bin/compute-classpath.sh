@@ -89,7 +89,13 @@ if [[ "$jar_error_check" =~ "invalid CEN header" ]]; then
   exit 1
 fi
 
-CLASSPATH="$CLASSPATH:$ASSEMBLY_JAR"
+HADOOP_LZO_JARS=$(find /opt/hadoop/share/hadoop/mapreduce/lib/hadoop-lzo-* | head -n 1)
+
+if [ ! -f "$HADOOP_LZO_JARS" ] ; then
+  echo "error - hadoop lzo jars are missing on this machine, something is not consistent!"
+fi
+
+CLASSPATH="$CLASSPATH:$ASSEMBLY_JAR:$HADOOP_LZO_JARS"
 
 # When Hive support is needed, Datanucleus jars must be included on the classpath.
 # Datanucleus jars do not work if only included in the uber jar as plugin.xml metadata is lost.
@@ -100,7 +106,7 @@ CLASSPATH="$CLASSPATH:$ASSEMBLY_JAR"
 if [ -f "$FWDIR/RELEASE" ]; then
   datanucleus_dir="$FWDIR"/lib
 else
-  datanucleus_dir="$FWDIR"/lib_managed/jars
+  datanucleus_dir=/opt/hive/lib
 fi
 
 datanucleus_jars=$(find "$datanucleus_dir" 2>/dev/null | grep "datanucleus-.*\\.jar")
