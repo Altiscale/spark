@@ -5,7 +5,7 @@ run them locally by setting appropriate environment variables.
 ```
 $ cd sbt_app_core
 $ SCALA_VERSION=2.10.4 \
-  SPARK_VERSION=1.0.0-SNAPSHOT \
+  SPARK_VERSION=1.0.0 \
   SPARK_RELEASE_REPOSITORY=file:///home/patrick/.ivy2/local \
   sbt run
 ```
