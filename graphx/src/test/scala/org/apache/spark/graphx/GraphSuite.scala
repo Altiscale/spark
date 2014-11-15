@@ -19,7 +19,6 @@ package org.apache.spark.graphx
 
 import org.scalatest.FunSuite
 
-import org.apache.spark.SparkConf
 import org.apache.spark.SparkContext
 import org.apache.spark.graphx.Graph._
 import org.apache.spark.graphx.PartitionStrategy._
@@ -119,7 +118,7 @@ class GraphSuite extends FunSuite with LocalSparkContext {
       // Each vertex should be replicated to at most 2 * sqrt(p) partitions
       val partitionSets = partitionedGraph.edges.partitionsRDD.mapPartitions { iter =>
         val part = iter.next()._2
-        Iterator((part.srcIds ++ part.dstIds).toSet)
+        Iterator((part.iterator.flatMap(e => Iterator(e.srcId, e.dstId))).toSet)
       }.collect
       if (!verts.forall(id => partitionSets.count(_.contains(id)) <= bound)) {
         val numFailures = verts.count(id => partitionSets.count(_.contains(id)) > bound)
@@ -131,7 +130,7 @@ class GraphSuite extends FunSuite with LocalSparkContext {
       // This should not be true for the default hash partitioning
       val partitionSetsUnpartitioned = graph.edges.partitionsRDD.mapPartitions { iter =>
         val part = iter.next()._2
-        Iterator((part.srcIds ++ part.dstIds).toSet)
+        Iterator((part.iterator.flatMap(e => Iterator(e.srcId, e.dstId))).toSet)
       }.collect
       assert(verts.exists(id => partitionSetsUnpartitioned.count(_.contains(id)) > bound))
 
@@ -319,6 +318,21 @@ class GraphSuite extends FunSuite with LocalSparkContext {
     }
   }
 
+  test("aggregateMessages") {
+    withSpark { sc =>
+      val n = 5
+      val agg = starGraph(sc, n).aggregateMessages[String](
+        ctx => {
+          if (ctx.dstAttr != null) {
+            throw new Exception(
+              "expected ctx.dstAttr to be null due to TripletFields, but it was " + ctx.dstAttr)
+          }
+          ctx.sendToDst(ctx.srcAttr)
+        }, _ + _, TripletFields.SrcOnly)
+      assert(agg.collect().toSet === (1 to n).map(x => (x: VertexId, "v")).toSet)
+    }
+  }
+
   test("outerJoinVertices") {
     withSpark { sc =>
       val n = 5
@@ -351,19 +365,4 @@ class GraphSuite extends FunSuite with LocalSparkContext {
     }
   }
 
-  test("non-default number of edge partitions") {
-    val n = 10
-    val defaultParallelism = 3
-    val numEdgePartitions = 4
-    assert(defaultParallelism != numEdgePartitions)
-    val conf = new SparkConf()
-      .set("spark.default.parallelism", defaultParallelism.toString)
-    val sc = new SparkContext("local", "test", conf)
-    val edges = sc.parallelize((1 to n).map(x => (x: VertexId, 0: VertexId)),
-      numEdgePartitions)
-    val graph = Graph.fromEdgeTuples(edges, 1)
-    val neighborAttrSums = graph.mapReduceTriplets[Int](
-      et => Iterator((et.dstId, et.srcAttr)), _ + _)
-    assert(neighborAttrSums.collect.toSet === Set((0: VertexId, n)))
-  }
 }

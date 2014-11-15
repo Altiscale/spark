@@ -28,7 +28,7 @@ set -o pipefail
 set -e
 
 # Figure out where the Spark framework is installed
-FWDIR="$(cd `dirname $0`; pwd)"
+FWDIR="$(cd "`dirname "$0"`"; pwd)"
 DISTDIR="$FWDIR/dist"
 
 SPARK_TACHYON=false
@@ -40,7 +40,7 @@ function exit_with_usage {
   echo ""
   echo "usage:"
   echo "./make-distribution.sh [--name] [--tgz] [--with-tachyon] <maven build options>"
-  echo "See Spark's \"Building with Maven\" doc for correct Maven options."
+  echo "See Spark's \"Building Spark\" doc for correct Maven options."
   echo ""
   exit 1
 }
@@ -50,7 +50,8 @@ while (( "$#" )); do
   case $1 in
     --hadoop)
       echo "Error: '--hadoop' is no longer supported:"
-      echo "Error: use Maven options -Phadoop.version and -Pyarn.version"
+      echo "Error: use Maven profiles and options -Dhadoop.version and -Dyarn.version instead."
+      echo "Error: Related profiles include hadoop-0.23, hdaoop-2.2, hadoop-2.3 and hadoop-2.4."
       exit_with_usage
       ;;
     --with-yarn)
@@ -58,7 +59,7 @@ while (( "$#" )); do
       exit_with_usage
       ;;
     --with-hive)
-      echo "Error: '--with-hive' is no longer supported, use Maven option -Phive"
+      echo "Error: '--with-hive' is no longer supported, use Maven options -Phive and -Phive-thriftserver"
       exit_with_usage
       ;;
     --skip-java-test)
@@ -180,6 +181,9 @@ echo "Spark $VERSION$GITREVSTRING built for Hadoop $SPARK_HADOOP_VERSION" > "$DI
 # Copy jars
 cp "$FWDIR"/assembly/target/scala*/*assembly*hadoop*.jar "$DISTDIR/lib/"
 cp "$FWDIR"/examples/target/scala*/spark-examples*.jar "$DISTDIR/lib/"
+# This will fail if the -Pyarn profile is not provided
+# In this case, silence the error and ignore the return code of this command
+cp "$FWDIR"/network/yarn/target/scala*/spark-*-yarn-shuffle.jar "$DISTDIR/lib/" &> /dev/null || :
 
 # Copy example sources (needed for python and SQL)
 mkdir -p "$DISTDIR/examples/src/main"
@@ -200,7 +204,6 @@ fi
 # Copy other things
 mkdir "$DISTDIR"/conf
 cp "$FWDIR"/conf/*.template "$DISTDIR"/conf
-cp "$FWDIR"/conf/slaves "$DISTDIR"/conf
 cp "$FWDIR/README.md" "$DISTDIR"
 cp -r "$FWDIR/bin" "$DISTDIR"
 cp -r "$FWDIR/python" "$DISTDIR"
