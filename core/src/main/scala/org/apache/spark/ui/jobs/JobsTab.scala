@@ -15,18 +15,18 @@
  * limitations under the License.
  */
 
-/* Adds background colors to stripe table rows in the summary table (on the stage page). This is
- * necessary (instead of using css or the table striping provided by bootstrap) because the summary
- * table has hidden rows.
- *
- * An ID selector (rather than a class selector) is used to ensure this runs quickly even on pages
- * with thousands of task rows (ID selectors are much faster than class selectors). */
-function stripeSummaryTable() {
-    $("#task-summary-table").find("tr:not(:hidden)").each(function (index) {
-       if (index % 2 == 1) {
-         $(this).css("background-color", "#f9f9f9");
-       } else {
-         $(this).css("background-color", "#ffffff");
-       }
-    });
+package org.apache.spark.ui.jobs
+
+import org.apache.spark.scheduler.SchedulingMode
+import org.apache.spark.ui.{SparkUI, SparkUITab}
+
+/** Web UI showing progress status of all jobs in the given SparkContext. */
+private[ui] class JobsTab(parent: SparkUI) extends SparkUITab(parent, "jobs") {
+  val sc = parent.sc
+  val killEnabled = parent.killEnabled
+  def isFairScheduler = listener.schedulingMode.exists(_ == SchedulingMode.FAIR)
+  val listener = parent.jobProgressListener
+
+  attachPage(new AllJobsPage(this))
+  attachPage(new JobPage(this))
 }
