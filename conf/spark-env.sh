@@ -20,6 +20,15 @@ HADOOP_HOME=/opt/hadoop/
 # - HADOOP_CONF_DIR, to point Spark towards Hadoop configuration files
 HADOOP_CONF_DIR=/etc/hadoop/
 YARN_CONF_DIR=/etc/hadoop/
+
+HADOOP_SNAPPY_JAR=$(find $HADOOP_HOME/share/hadoop/common/lib/ -type f -name "snappy-java-*.jar")
+HADOOP_LZO_JAR=$(find $HADOOP_HOME/share/hadoop/common/lib/ -type f -name "hadoop-lzo-*.jar")
+
+export JAVA_LIBRARY_PATH=$JAVA_LIBRARY_PATH:$HADOOP_HOME/lib/native
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HADOOP_HOME/lib/native
+export SPARK_LIBRARY_PATH=$SPARK_LIBRARY_PATH:$HADOOP_HOME/lib/native
+export SPARK_CLASSPATH=$SPARK_CLASSPATH:$HADOOP_SNAPPY_JAR:$HADOOP_LZO_JAR
+
 # - SPARK_EXECUTOR_INSTANCES, Number of workers to start (Default: 2)
 # - SPARK_EXECUTOR_CORES, Number of cores for the workers (Default: 1).
 # - SPARK_EXECUTOR_MEMORY, Memory per Worker (e.g. 1000M, 2G) (Default: 1G)
