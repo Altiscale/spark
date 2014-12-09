@@ -126,7 +126,7 @@
     <flume.version>1.4.0</flume.version>
     <zookeeper.version>3.4.5</zookeeper.version>
     <!-- Version used in Maven Hive dependency -->
-    <hive.version>0.13.1</hive.version>
+    <hive.version>0.13.1a</hive.version>
     <!-- Version used for internal directory structure -->
     <hive.version.short>0.13.1</hive.version.short>
     <derby.version>10.10.1.1</derby.version>
@@ -1422,7 +1422,7 @@
     <profile>
       <id>hive-0.13.1</id>
       <properties>
-        <hive.version>0.13.1</hive.version>
+        <hive.version>0.13.1a</hive.version>
         <hive.version.short>0.13.1</hive.version.short>
         <derby.version>10.10.1.1</derby.version>
       </properties>
