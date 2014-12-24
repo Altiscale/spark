@@ -105,7 +105,7 @@ CLASSPATH="$CLASSPATH:$ASSEMBLY_JAR"
 if [ -f "$FWDIR/RELEASE" ]; then
   datanucleus_dir="$FWDIR"/lib
 else
-  datanucleus_dir="$FWDIR"/lib_managed/jars
+  datanucleus_dir=/opt/hive/lib/
 fi
 
 datanucleus_jars="$(find "$datanucleus_dir" 2>/dev/null | grep "datanucleus-.*\\.jar")"
