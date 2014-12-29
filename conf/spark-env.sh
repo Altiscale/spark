@@ -27,7 +27,9 @@ HADOOP_LZO_JAR=$(find $HADOOP_HOME/share/hadoop/common/lib/ -type f -name "hadoo
 export JAVA_LIBRARY_PATH=$JAVA_LIBRARY_PATH:$HADOOP_HOME/lib/native
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HADOOP_HOME/lib/native
 export SPARK_LIBRARY_PATH=$SPARK_LIBRARY_PATH:$HADOOP_HOME/lib/native
-export SPARK_CLASSPATH=$SPARK_CLASSPATH:$HADOOP_SNAPPY_JAR:$HADOOP_LZO_JAR
+export MYSQL_JDBC_DRIVER=/opt/mysql-connector/mysql-connector.jar
+# export SPARK_CLASSPATH=$SPARK_CLASSPATH:$HADOOP_SNAPPY_JAR:$HADOOP_LZO_JAR:/opt/hadoop/share/hadoop/hdfs/hadoop-hdfs-2.4.1.jar:/opt/hadoop/share/hadoop/yarn/hadoop-yarn-client-2.4.1.jar:/opt/hadoop/share/hadoop/yarn/hadoop-yarn-common-2.4.1.jar:/opt/hadoop/share/hadoop/yarn/hadoop-yarn-api-2.4.1.jar:/opt/hadoop/share/hadoop/yarn/hadoop-yarn-server-web-proxy-2.4.1.jar:/opt/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-client-app-2.4.1.jar:/opt/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-client-jobclient-2.4.1.jar:/opt/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-client-core-2.4.1.jar:/opt/hive/lib/mysql-connector.jar
+export SPARK_CLASSPATH=$SPARK_CLASSPATH:$HADOOP_SNAPPY_JAR:$HADOOP_LZO_JAR:$MYSQL_JDBC_DRIVER
 
 # - SPARK_EXECUTOR_INSTANCES, Number of workers to start (Default: 2)
 # - SPARK_EXECUTOR_CORES, Number of cores for the workers (Default: 1).
@@ -36,5 +38,6 @@ export SPARK_CLASSPATH=$SPARK_CLASSPATH:$HADOOP_SNAPPY_JAR:$HADOOP_LZO_JAR
 # - SPARK_YARN_APP_NAME, The name of your application (Default: Spark)
 # - SPARK_YARN_QUEUE, The hadoop queue to use for allocation requests (Default: ‘default’)
 # - SPARK_YARN_DIST_FILES, Comma separated list of files to be distributed with the job.
+# SPARK_YARN_DIST_FILES=/user/spark/opt/hadoop/share/hadoop/hdfs/hadoop-hdfs-2.4.1.jar,/user/spark/opt/hadoop/share/hadoop/yarn/hadoop-yarn-client-2.4.1.jar,/user/spark/opt/hadoop/share/hadoop/yarn/hadoop-yarn-common-2.4.1.jar,/user/spark/opt/hadoop/share/hadoop/yarn/hadoop-yarn-api-2.4.1.jar,/user/spark/opt/hadoop/share/hadoop/yarn/hadoop-yarn-server-web-proxy-2.4.1.jar,/user/spark/opt/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-client-app-2.4.1.jar,/user/spark/opt/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-client-jobclient-2.4.1.jar,/user/spark/opt/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-client-core-2.4.1.jar
 # - SPARK_YARN_DIST_ARCHIVES, Comma separated list of archives to be distributed with the job.
 
