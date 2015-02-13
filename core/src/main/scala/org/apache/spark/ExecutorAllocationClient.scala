@@ -18,14 +18,25 @@
 package org.apache.spark
 
 /**
- * An identifier for a partition in an RDD.
+ * A client that communicates with the cluster manager to request or kill executors.
  */
-trait Partition extends Serializable {
-  /**
-   * Get the partition's index within its parent RDD
-   */
-  def index: Int
+private[spark] trait ExecutorAllocationClient {
 
-  // A better default implementation of HashCode
-  override def hashCode(): Int = index
+  /**
+   * Request an additional number of executors from the cluster manager.
+   * Return whether the request is acknowledged by the cluster manager.
+   */
+  def requestExecutors(numAdditionalExecutors: Int): Boolean
+
+  /**
+   * Request that the cluster manager kill the specified executors.
+   * Return whether the request is acknowledged by the cluster manager.
+   */
+  def killExecutors(executorIds: Seq[String]): Boolean
+
+  /**
+   * Request that the cluster manager kill the specified executor.
+   * Return whether the request is acknowledged by the cluster manager.
+   */
+  def killExecutor(executorId: String): Boolean = killExecutors(Seq(executorId))
 }
