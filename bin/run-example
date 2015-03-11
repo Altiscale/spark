@@ -37,12 +37,12 @@ fi
 if [ -f "$FWDIR/RELEASE" ]; then
   JAR_PATH="${FWDIR}/lib"
 else
-  JAR_PATH="${EXAMPLES_DIR}/target/scala-${SPARK_SCALA_VERSION}"
+  JAR_PATH="$EXAMPLES_DIR/target/"
 fi
 
 JAR_COUNT=0
 
-for f in ${JAR_PATH}/spark-examples-*hadoop*.jar; do
+for f in ${JAR_PATH}/spark-examples_*-${SPARK_VERSION}.jar; do
   if [[ ! -e "$f" ]]; then
     echo "Failed to find Spark examples assembly in $FWDIR/lib or $FWDIR/examples/target" 1>&2
     echo "You need to build Spark before running this program" 1>&2
