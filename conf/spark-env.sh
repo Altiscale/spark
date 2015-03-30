@@ -32,7 +32,12 @@ export HIVE_TEZ_JARS=""
 if [ -f /etc/tez/tez-site.xml ] ; then
   HIVE_TEZ_JARS=$(find /opt/tez/ -type f -name "*.jar" | tr -s "\n" ":" | sed 's/:$//')
 fi
-export SPARK_CLASSPATH=$SPARK_CLASSPATH:$HADOOP_SNAPPY_JAR:$HADOOP_LZO_JAR:$MYSQL_JDBC_DRIVER:$HIVE_TEZ_JARS
+
+# OBSOLETE
+# DO NOT USE SPARK_CLASSPATH anymore since it conflict in yarn-client mode with --driver-class-path
+# Use --jars and --driver-class-path in the future for compatibility on both yarn-client and yarn-cluster mode
+# See test_spark_shell.sh and test_spark_hql.sh for examples
+# export SPARK_CLASSPATH=$SPARK_CLASSPATH:$HADOOP_SNAPPY_JAR:$HADOOP_LZO_JAR:$MYSQL_JDBC_DRIVER:$HIVE_TEZ_JARS
 
 # - SPARK_EXECUTOR_INSTANCES, Number of workers to start (Default: 2)
 # - SPARK_EXECUTOR_CORES, Number of cores for the workers (Default: 1).
