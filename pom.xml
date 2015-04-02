@@ -947,19 +947,19 @@
       <dependency>
         <groupId>${hive.group}</groupId>
         <artifactId>hive-beeline</artifactId>
-        <version>${hive.version}</version>
+        <version>0.13.1a</version>
         <scope>${hive.deps.scope}</scope>
       </dependency>
       <dependency>
         <groupId>${hive.group}</groupId>
         <artifactId>hive-cli</artifactId>
-        <version>${hive.version}</version>
+        <version>0.13.1a</version>
         <scope>${hive.deps.scope}</scope>
       </dependency>
       <dependency>
         <groupId>${hive.group}</groupId>
         <artifactId>hive-exec</artifactId>
-        <version>${hive.version}</version>
+        <version>0.13.1a</version>
         <scope>${hive.deps.scope}</scope>
         <exclusions>
           <exclusion>
@@ -979,19 +979,19 @@
       <dependency>
         <groupId>${hive.group}</groupId>
         <artifactId>hive-jdbc</artifactId>
-        <version>${hive.version}</version>
+        <version>0.13.1a</version>
         <scope>${hive.deps.scope}</scope>
       </dependency>
       <dependency>
         <groupId>${hive.group}</groupId>
         <artifactId>hive-metastore</artifactId>
-        <version>${hive.version}</version>
+        <version>0.13.1a</version>
         <scope>${hive.deps.scope}</scope>
       </dependency>
       <dependency>
         <groupId>${hive.group}</groupId>
         <artifactId>hive-serde</artifactId>
-        <version>${hive.version}</version>
+        <version>0.13.1a</version>
         <scope>${hive.deps.scope}</scope>
         <exclusions>
           <exclusion>
