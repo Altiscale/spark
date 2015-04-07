@@ -746,6 +746,18 @@ Apart from these, the following properties are also available, and may be useful
   </td>
 </tr>
 <tr>
+  <td><code>spark.files.useFetchCache</code></td>
+  <td>true</td>
+  <td>
+    If set to true (default), file fetching will use a local cache that is shared by executors
+    that belong to the same application, which can improve task launching performance when
+    running many executors on the same host. If set to false, these caching optimizations will
+    be disabled and all executors will fetch their own copies of files. This optimization may be
+    disabled in order to use Spark local directories that reside on NFS filesystems (see
+    <a href="https://issues.apache.org/jira/browse/SPARK-6313">SPARK-6313</a> for more details).
+  </td>
+</tr>
+<tr>
   <td><code>spark.files.overwrite</code></td>
   <td>false</td>
   <td>
@@ -1345,9 +1357,9 @@ Apart from these, the following properties are also available, and may be useful
 </tr>
 <tr>
   <td><code>spark.streaming.receiver.maxRate</code></td>
-  <td>infinite</td>
+  <td>not set</td>
   <td>
-    Maximum number records per second at which each receiver will receive data.
+    Maximum rate (number of records per second) at which each receiver will receive data.
     Effectively, each stream will consume at most this number of records per second.
     Setting this configuration to 0 or a negative number will put no limit on the rate.
     See the <a href="streaming-programming-guide.html#deploying-applications">deployment guide</a>
@@ -1373,6 +1385,16 @@ Apart from these, the following properties are also available, and may be useful
     Setting this to false will allow the raw data and persisted RDDs to be accessible outside the
     streaming application as they will not be cleared automatically. But it comes at the cost of
     higher memory usage in Spark.
+  </td>
+</tr>
+<tr>
+  <td><code>spark.streaming.kafka.maxRatePerPartition</code></td>
+  <td>not set</td>
+  <td>
+    Maximum rate (number of records per second) at which data will be read from each Kafka
+    partition when using the new Kafka direct stream API. See the
+    <a href="streaming-kafka-integration.html">Kafka Integration guide</a>
+    for more details.
   </td>
 </tr>
 </table>

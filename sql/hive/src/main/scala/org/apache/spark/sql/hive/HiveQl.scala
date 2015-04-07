@@ -196,8 +196,8 @@ private[hive] object HiveQl {
      * Right now this function only checks the name, type, text and children of the node
      * for equality.
      */
-    def checkEquals(other: ASTNode) {
-      def check(field: String, f: ASTNode => Any) = if (f(n) != f(other)) {
+    def checkEquals(other: ASTNode): Unit = {
+      def check(field: String, f: ASTNode => Any): Unit = if (f(n) != f(other)) {
         sys.error(s"$field does not match for trees. " +
           s"'${f(n)}' != '${f(other)}' left: ${dumpTree(n)}, right: ${dumpTree(other)}")
       }
@@ -209,7 +209,7 @@ private[hive] object HiveQl {
       val leftChildren = nilIfEmpty(n.getChildren).asInstanceOf[Seq[ASTNode]]
       val rightChildren = nilIfEmpty(other.getChildren).asInstanceOf[Seq[ASTNode]]
       leftChildren zip rightChildren foreach {
-        case (l,r) => l checkEquals r
+        case (l, r) => l checkEquals r
       }
     }
   }
@@ -269,7 +269,7 @@ private[hive] object HiveQl {
   }
 
   /** Creates LogicalPlan for a given VIEW */
-  def createPlanForView(view: Table, alias: Option[String]) = alias match {
+  def createPlanForView(view: Table, alias: Option[String]): Subquery = alias match {
     // because hive use things like `_c0` to build the expanded text
     // currently we cannot support view from "create view v1(c1) as ..."
     case None => Subquery(view.getTableName, createPlan(view.getViewExpandedText))
@@ -323,7 +323,7 @@ private[hive] object HiveQl {
     clauses
   }
 
-  def getClause(clauseName: String, nodeList: Seq[Node]) =
+  def getClause(clauseName: String, nodeList: Seq[Node]): Node =
     getClauseOption(clauseName, nodeList).getOrElse(sys.error(
       s"Expected clause $clauseName missing from ${nodeList.map(dumpTree(_)).mkString("\n")}"))
 
@@ -475,7 +475,7 @@ https://cwiki.apache.org/confluence/display/Hive/Enhanced+Aggregation%2C+Cube%2C
     // Just fake explain for any of the native commands.
     case Token("TOK_EXPLAIN", explainArgs)
       if noExplainCommands.contains(explainArgs.head.getText) =>
-      ExplainCommand(NoRelation)
+      ExplainCommand(OneRowRelation)
     case Token("TOK_EXPLAIN", explainArgs)
       if "TOK_CREATETABLE" == explainArgs.head.getText =>
       val Some(crtTbl) :: _ :: extended :: Nil =
@@ -618,7 +618,7 @@ https://cwiki.apache.org/confluence/display/Hive/Enhanced+Aggregation%2C+Cube%2C
  
         val relations = fromClause match {
           case Some(f) => nodeToRelation(f)
-          case None => NoRelation
+          case None => OneRowRelation
         }
  
         val withWhere = whereClause.map { whereNode =>

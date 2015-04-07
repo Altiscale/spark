@@ -38,7 +38,7 @@ class GroupedData protected[sql](df: DataFrame, groupingExprs: Seq[Expression]) 
   private[this] implicit def toDF(aggExprs: Seq[NamedExpression]): DataFrame = {
     val namedGroupingExprs = groupingExprs.map {
       case expr: NamedExpression => expr
-      case expr: Expression => Alias(expr, expr.toString)()
+      case expr: Expression => Alias(expr, expr.prettyString)()
     }
     DataFrame(
       df.sqlContext, Aggregate(groupingExprs, namedGroupingExprs ++ aggExprs, df.logicalPlan))
@@ -64,7 +64,7 @@ class GroupedData protected[sql](df: DataFrame, groupingExprs: Seq[Expression]) 
     }
     columnExprs.map { c =>
       val a = f(c)
-      Alias(a, a.toString)()
+      Alias(a, a.prettyString)()
     }
   }
  
@@ -116,7 +116,7 @@ class GroupedData protected[sql](df: DataFrame, groupingExprs: Seq[Expression]) 
   def agg(exprs: Map[String, String]): DataFrame = {
     exprs.map { case (colName, expr) =>
       val a = strToExpr(expr)(df(colName).expr)
-      Alias(a, a.toString)()
+      Alias(a, a.prettyString)()
     }.toSeq
   }
 
@@ -128,10 +128,7 @@ class GroupedData protected[sql](df: DataFrame, groupingExprs: Seq[Expression]) 
    * {{{
    *   // Selects the age of the oldest employee and the aggregate expense for each department
    *   import com.google.common.collect.ImmutableMap;
-   *   df.groupBy("department").agg(ImmutableMap.<String, String>builder()
-   *     .put("age", "max")
-   *     .put("expense", "sum")
-   *     .build());
+   *   df.groupBy("department").agg(ImmutableMap.of("age", "max", "expense", "sum"));
    * }}}
    */
   def agg(exprs: java.util.Map[String, String]): DataFrame = {
@@ -160,7 +157,7 @@ class GroupedData protected[sql](df: DataFrame, groupingExprs: Seq[Expression]) 
   def agg(expr: Column, exprs: Column*): DataFrame = {
     val aggExprs = (expr +: exprs).map(_.expr).map {
       case expr: NamedExpression => expr
-      case expr: Expression => Alias(expr, expr.toString)()
+      case expr: Expression => Alias(expr, expr.prettyString)()
     }
     DataFrame(df.sqlContext, Aggregate(groupingExprs, aggExprs, df.logicalPlan))
   }
