@@ -1651,6 +1651,10 @@
       <modules>
         <module>sql/hive-thriftserver</module>
       </modules>
+      <properties>
+        <hive.version>0.13.1a</hive.version>
+        <hive.version.short>0.13.1</hive.version.short>
+      </properties>
     </profile>
     <profile>
       <id>hive-0.12.0</id>

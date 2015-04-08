@@ -44,17 +44,17 @@
     <dependency>
       <groupId>${hive.group}</groupId>
       <artifactId>hive-cli</artifactId>
-      <version>${hive.version}</version>
+      <version>0.13.1a</version>
     </dependency>
     <dependency>
       <groupId>${hive.group}</groupId>
       <artifactId>hive-jdbc</artifactId>
-      <version>${hive.version}</version>
+      <version>0.13.1a</version>
     </dependency>
     <dependency>
       <groupId>${hive.group}</groupId>
       <artifactId>hive-beeline</artifactId>
-      <version>${hive.version}</version>
+      <version>0.13.1a</version>
     </dependency>
   </dependencies>
   <build>
