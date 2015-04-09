@@ -33,6 +33,8 @@
   <url>http://spark.apache.org/</url>
   <properties>
     <sbt.project.name>hive-thriftserver</sbt.project.name>
+    <hive.version>0.13.1a</hive.version>
+    <hive.version.short>0.13.1</hive.version.short>
   </properties>
 
   <dependencies>
@@ -44,17 +46,17 @@
     <dependency>
       <groupId>${hive.group}</groupId>
       <artifactId>hive-cli</artifactId>
-      <version>0.13.1a</version>
+      <version>${hive.version}</version>
     </dependency>
     <dependency>
       <groupId>${hive.group}</groupId>
       <artifactId>hive-jdbc</artifactId>
-      <version>0.13.1a</version>
+      <version>${hive.version}</version>
     </dependency>
     <dependency>
       <groupId>${hive.group}</groupId>
       <artifactId>hive-beeline</artifactId>
-      <version>0.13.1a</version>
+      <version>${hive.version}</version>
     </dependency>
   </dependencies>
   <build>
