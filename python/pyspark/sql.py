@@ -36,6 +36,7 @@ import keyword
 import warnings
 import json
 import re
+import weakref
 from array import array
 from operator import itemgetter
 from itertools import imap
@@ -43,7 +44,7 @@ from itertools import imap
 from py4j.protocol import Py4JError
 from py4j.java_collections import ListConverter, MapConverter
 
-from pyspark.rdd import RDD
+from pyspark.rdd import RDD, _load_from_socket
 from pyspark.serializers import BatchedSerializer, AutoBatchedSerializer, PickleSerializer, \
     CloudPickleSerializer, UTF8Deserializer
 from pyspark.storagelevel import StorageLevel
@@ -68,8 +69,7 @@ class DataType(object):
         return hash(str(self))
 
     def __eq__(self, other):
-        return (isinstance(other, self.__class__) and
-                self.__dict__ == other.__dict__)
+        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -104,10 +104,6 @@ class PrimitiveType(DataType):
     """Spark SQL PrimitiveType"""
 
     __metaclass__ = PrimitiveTypeSingleton
-
-    def __eq__(self, other):
-        # because they should be the same object
-        return self is other
 
 
 class NullType(PrimitiveType):
@@ -251,9 +247,9 @@ class ArrayType(DataType):
         :param elementType: the data type of elements.
         :param containsNull: indicates whether the list contains None values.
 
-        >>> ArrayType(StringType) == ArrayType(StringType, True)
+        >>> ArrayType(StringType()) == ArrayType(StringType(), True)
         True
-        >>> ArrayType(StringType, False) == ArrayType(StringType)
+        >>> ArrayType(StringType(), False) == ArrayType(StringType())
         False
         """
         self.elementType = elementType
@@ -298,11 +294,11 @@ class MapType(DataType):
         :param valueContainsNull: indicates whether values contains
         null values.
 
-        >>> (MapType(StringType, IntegerType)
-        ...        == MapType(StringType, IntegerType, True))
+        >>> (MapType(StringType(), IntegerType())
+        ...        == MapType(StringType(), IntegerType(), True))
         True
-        >>> (MapType(StringType, IntegerType, False)
-        ...        == MapType(StringType, FloatType))
+        >>> (MapType(StringType(), IntegerType(), False)
+        ...        == MapType(StringType(), FloatType()))
         False
         """
         self.keyType = keyType
@@ -351,11 +347,11 @@ class StructField(DataType):
                          to simple type that can be serialized to JSON
                          automatically
 
-        >>> (StructField("f1", StringType, True)
-        ...      == StructField("f1", StringType, True))
+        >>> (StructField("f1", StringType(), True)
+        ...      == StructField("f1", StringType(), True))
         True
-        >>> (StructField("f1", StringType, True)
-        ...      == StructField("f2", StringType, True))
+        >>> (StructField("f1", StringType(), True)
+        ...      == StructField("f2", StringType(), True))
         False
         """
         self.name = name
@@ -393,13 +389,13 @@ class StructType(DataType):
     def __init__(self, fields):
         """Creates a StructType
 
-        >>> struct1 = StructType([StructField("f1", StringType, True)])
-        >>> struct2 = StructType([StructField("f1", StringType, True)])
+        >>> struct1 = StructType([StructField("f1", StringType(), True)])
+        >>> struct2 = StructType([StructField("f1", StringType(), True)])
         >>> struct1 == struct2
         True
-        >>> struct1 = StructType([StructField("f1", StringType, True)])
-        >>> struct2 = StructType([StructField("f1", StringType, True),
-        ...   [StructField("f2", IntegerType, False)]])
+        >>> struct1 = StructType([StructField("f1", StringType(), True)])
+        >>> struct2 = StructType([StructField("f1", StringType(), True),
+        ...                       StructField("f2", IntegerType(), False)])
         >>> struct1 == struct2
         False
         """
@@ -499,6 +495,10 @@ _all_complex_types = dict((v.typeName(), v)
 
 def _parse_datatype_json_string(json_string):
     """Parses the given data type JSON string.
+
+    >>> import pickle
+    >>> LongType() == pickle.loads(pickle.dumps(LongType()))
+    True
     >>> def check_datatype(datatype):
     ...     scala_datatype = sqlCtx._ssql_ctx.parseDataType(datatype.json())
     ...     python_datatype = _parse_datatype_json_string(scala_datatype.json())
@@ -577,7 +577,7 @@ def _parse_datatype_json_value(json_value):
 _type_mappings = {
     type(None): NullType,
     bool: BooleanType,
-    int: IntegerType,
+    int: LongType,
     long: LongType,
     float: DoubleType,
     str: StringType,
@@ -781,8 +781,25 @@ def _merge_type(a, b):
         return a
 
 
+def _need_converter(dataType):
+    if isinstance(dataType, StructType):
+        return True
+    elif isinstance(dataType, ArrayType):
+        return _need_converter(dataType.elementType)
+    elif isinstance(dataType, MapType):
+        return _need_converter(dataType.keyType) or _need_converter(dataType.valueType)
+    elif isinstance(dataType, NullType):
+        return True
+    else:
+        return False
+
+
 def _create_converter(dataType):
     """Create an converter to drop the names of fields in obj """
+
+    if not _need_converter(dataType):
+        return lambda x: x
+
     if isinstance(dataType, ArrayType):
         conv = _create_converter(dataType.elementType)
         return lambda row: map(conv, row)
@@ -800,6 +817,7 @@ def _create_converter(dataType):
     # dataType must be StructType
     names = [f.name for f in dataType.fields]
     converters = [_create_converter(f.dataType) for f in dataType.fields]
+    convert_fields = any(_need_converter(f.dataType) for f in dataType.fields)
 
     def convert_struct(obj):
         if obj is None:
@@ -822,7 +840,10 @@ def _create_converter(dataType):
         else:
             raise ValueError("Unexpected obj: %s" % obj)
 
-        return tuple([conv(d.get(name)) for name, conv in zip(names, converters)])
+        if convert_fields:
+            return tuple([conv(d.get(name)) for name, conv in zip(names, converters)])
+        else:
+            return tuple([d.get(name) for name in names])
 
     return convert_struct
 
@@ -926,11 +947,11 @@ def _infer_schema_type(obj, dataType):
     >>> schema = _parse_schema_abstract("a b c d")
     >>> row = (1, 1.0, "str", datetime.date(2014, 10, 10))
     >>> _infer_schema_type(row, schema)
-    StructType...IntegerType...DoubleType...StringType...DateType...
+    StructType...LongType...DoubleType...StringType...DateType...
     >>> row = [[1], {"key": (1, 2.0)}]
     >>> schema = _parse_schema_abstract("a[] b{c d}")
     >>> _infer_schema_type(row, schema)
-    StructType...a,ArrayType...b,MapType(StringType,...c,IntegerType...
+    StructType...a,ArrayType...b,MapType(StringType,...c,LongType...
     """
     if dataType is None:
         return _infer_type(obj)
@@ -985,7 +1006,7 @@ def _verify_type(obj, dataType):
 
     >>> _verify_type(None, StructType([]))
     >>> _verify_type("", StringType())
-    >>> _verify_type(0, IntegerType())
+    >>> _verify_type(0, LongType())
     >>> _verify_type(range(3), ArrayType(ShortType()))
     >>> _verify_type(set(), ArrayType(StringType())) # doctest: +IGNORE_EXCEPTION_DETAIL
     Traceback (most recent call last):
@@ -1039,7 +1060,7 @@ def _verify_type(obj, dataType):
             _verify_type(v, f.dataType)
 
 
-_cached_cls = {}
+_cached_cls = weakref.WeakValueDictionary()
 
 
 def _restore_object(dataType, obj):
@@ -1975,9 +1996,11 @@ class SchemaRDD(RDD):
         [Row(field1=1, field2=u'row1'), ..., Row(field1=3, field2=u'row3')]
         """
         with SCCallSiteSync(self.context) as css:
-            bytesInJava = self._jschema_rdd.baseSchemaRDD().collectToPython().iterator()
+            rdd = self._jschema_rdd.baseSchemaRDD().javaToPython().rdd()
+            port = self._sc._jvm.PythonRDD.collectAndServe(rdd)
+        rs = list(_load_from_socket(port, BatchedSerializer(PickleSerializer())))
         cls = _create_cls(self.schema())
-        return map(cls, self._collect_iterator_through_file(bytesInJava))
+        return [cls(r) for r in rs]
 
     def take(self, num):
         """Take the first num rows of the RDD.

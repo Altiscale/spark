@@ -281,13 +281,6 @@ private[spark] object Utils extends Logging {
         dir = new File(root, "spark-" + UUID.randomUUID.toString)
         if (dir.exists() || !dir.mkdirs()) {
           dir = null
-        } else {
-          // Restrict file permissions via chmod if available.
-          // For Windows this step is ignored.
-          if (!isWindows && !chmod700(dir)) {
-            dir.delete()
-            dir = null
-          }
         }
       } catch { case e: SecurityException => dir = null; }
     }
@@ -405,7 +398,8 @@ private[spark] object Utils extends Logging {
       useCache: Boolean) {
     val fileName = url.split("/").last
     val targetFile = new File(targetDir, fileName)
-    if (useCache) {
+    val fetchCacheEnabled = conf.getBoolean("spark.files.useFetchCache", defaultValue = true)
+    if (useCache && fetchCacheEnabled) {
       val cachedFileName = s"${url.hashCode}${timestamp}_cache"
       val lockFileName = s"${url.hashCode}${timestamp}_lock"
       val localDir = new File(getLocalDir(conf))
@@ -642,7 +636,9 @@ private[spark] object Utils extends Logging {
           try {
             val rootDir = new File(root)
             if (rootDir.exists || rootDir.mkdirs()) {
-              Some(createDirectory(root).getAbsolutePath())
+              val dir = createDirectory(root)
+              chmod700(dir)
+              Some(dir.getAbsolutePath)
             } else {
               logError(s"Failed to create dir in $root. Ignoring this directory.")
               None
@@ -1345,9 +1341,14 @@ private[spark] object Utils extends Logging {
     hashAbs
   }
 
-  /** Returns a copy of the system properties that is thread-safe to iterator over. */
-  def getSystemProperties(): Map[String, String] = {
-    System.getProperties.clone().asInstanceOf[java.util.Properties].toMap[String, String]
+  /** Returns the system properties map that is thread-safe to iterator over. It gets the
+    * properties which have been set explicitly, as well as those for which only a default value
+    * has been defined. */
+  def getSystemProperties: Map[String, String] = {
+    val sysProps = for (key <- System.getProperties.stringPropertyNames()) yield
+      (key, System.getProperty(key))
+
+    sysProps.toMap
   }
 
   /**
@@ -1751,6 +1752,10 @@ private[spark] object Utils extends Logging {
       startService: Int => (T, Int),
       conf: SparkConf,
       serviceName: String = ""): (T, Int) = {
+
+    require(startPort == 0 || (1024 <= startPort && startPort < 65536),
+      "startPort should be between 1024 and 65535 (inclusive), or 0 for a random free port.")
+
     val serviceString = if (serviceName.isEmpty) "" else s" '$serviceName'"
     val maxRetries = portMaxRetries(conf)
     for (offset <- 0 to maxRetries) {

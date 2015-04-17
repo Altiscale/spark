@@ -19,7 +19,6 @@ import copy
 from collections import defaultdict
 from itertools import chain, ifilter, imap
 import operator
-import os
 import sys
 import shlex
 from subprocess import Popen, PIPE
@@ -29,6 +28,7 @@ import warnings
 import heapq
 import bisect
 import random
+import socket
 from math import sqrt, log, isinf, isnan
 
 from pyspark.accumulators import PStatsParam
@@ -110,6 +110,31 @@ def _parse_memory(s):
     if s[-1] not in units:
         raise ValueError("invalid format: " + s)
     return int(float(s[:-1]) * units[s[-1].lower()])
+
+
+def _load_from_socket(port, serializer):
+    sock = socket.socket()
+    sock.settimeout(3)
+    try:
+        sock.connect(("localhost", port))
+        rf = sock.makefile("rb", 65536)
+        for item in serializer.load_stream(rf):
+            yield item
+    finally:
+        sock.close()
+
+
+class Partitioner(object):
+    def __init__(self, numPartitions, partitionFunc):
+        self.numPartitions = numPartitions
+        self.partitionFunc = partitionFunc
+
+    def __eq__(self, other):
+        return (isinstance(other, Partitioner) and self.numPartitions == other.numPartitions
+                and self.partitionFunc == other.partitionFunc)
+
+    def __call__(self, k):
+        return self.partitionFunc(k) % self.numPartitions
 
 
 class RDD(object):
@@ -683,21 +708,8 @@ class RDD(object):
         Return a list that contains all of the elements in this RDD.
         """
         with SCCallSiteSync(self.context) as css:
-            bytesInJava = self._jrdd.collect().iterator()
-        return list(self._collect_iterator_through_file(bytesInJava))
-
-    def _collect_iterator_through_file(self, iterator):
-        # Transferring lots of data through Py4J can be slow because
-        # socket.readline() is inefficient.  Instead, we'll dump the data to a
-        # file and read it back.
-        tempFile = NamedTemporaryFile(delete=False, dir=self.ctx._temp_dir)
-        tempFile.close()
-        self.ctx._writeToFile(iterator, tempFile.name)
-        # Read the data into Python and deserialize it:
-        with open(tempFile.name, 'rb') as tempFile:
-            for item in self._jrdd_deserializer.load_stream(tempFile):
-                yield item
-        os.unlink(tempFile.name)
+            port = self.ctx._jvm.PythonRDD.collectAndServe(self._jrdd.rdd())
+        return list(_load_from_socket(port, self._jrdd_deserializer))
 
     def reduce(self, f):
         """
@@ -1815,7 +1827,7 @@ class RDD(object):
 
         my_batch = get_batch_size(self._jrdd_deserializer)
         other_batch = get_batch_size(other._jrdd_deserializer)
-        if my_batch != other_batch:
+        if my_batch != other_batch or not my_batch:
             # use the smallest batchSize for both of them
             batchSize = min(my_batch, other_batch)
             if batchSize <= 0:

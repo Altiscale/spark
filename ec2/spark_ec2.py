@@ -39,8 +39,10 @@ import boto
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, BlockDeviceType, EBSBlockDeviceType
 from boto import ec2
 
-DEFAULT_SPARK_VERSION = "1.2.1"
+SPARK_EC2_VERSION = "1.2.2"
 SPARK_EC2_DIR = os.path.dirname(os.path.realpath(__file__))
+
+DEFAULT_SPARK_VERSION = SPARK_EC2_VERSION
 
 MESOS_SPARK_EC2_BRANCH = "v4"
 # A URL prefix from which to fetch AMI information
@@ -54,12 +56,10 @@ class UsageError(Exception):
 # Configure and parse our command-line arguments
 def parse_args():
     parser = OptionParser(
-        usage="spark-ec2 [options] <action> <cluster_name>"
-        + "\n\n<action> can be: launch, destroy, login, stop, start, get-master, reboot-slaves",
-        add_help_option=False)
-    parser.add_option(
-        "-h", "--help", action="help",
-        help="Show this help message and exit")
+        prog="spark-ec2",
+        version="%prog {v}".format(v=SPARK_EC2_VERSION),
+        usage="%prog [options] <action> <cluster_name>\n\n"
+        + "<action> can be: launch, destroy, login, stop, start, get-master, reboot-slaves")
     parser.add_option(
         "-s", "--slaves", type="int", default=1,
         help="Number of slaves to launch (default: %default)")
@@ -218,6 +218,7 @@ def get_spark_shark_version(opts):
         "1.1.1": "1.1.1",
         "1.2.0": "1.2.0",
         "1.2.1": "1.2.1",
+        "1.2.2": "1.2.2",
     }
     version = opts.spark_version.replace("v", "")
     if version not in spark_shark_map:
@@ -480,6 +481,9 @@ def launch_cluster(conn, opts, cluster_name):
         master_nodes = master_res.instances
         print "Launched master in %s, regid = %s" % (zone, master_res.id)
 
+    # This wait time corresponds to SPARK-4983
+    print "Waiting for AWS to propagate instance metadata..."
+    time.sleep(5)
     # Give the instances descriptive names
     for master in master_nodes:
         master.add_tag(
@@ -980,11 +984,12 @@ def real_main():
                     time.sleep(30)  # Yes, it does have to be this long :-(
                     for group in groups:
                         try:
-                            conn.delete_security_group(group.name)
-                            print "Deleted security group " + group.name
+                            # It is needed to use group_id to make it work with VPC
+                            conn.delete_security_group(group_id=group.id)
+                            print "Deleted security group %s" % group.name
                         except boto.exception.EC2ResponseError:
                             success = False
-                            print "Failed to delete security group " + group.name
+                            print "Failed to delete security group %s" % group.name
 
                     # Unfortunately, group.revoke() returns True even if a rule was not
                     # deleted, so this needs to be rerun if something fails

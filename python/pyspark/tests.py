@@ -51,7 +51,7 @@ from pyspark.serializers import read_int, BatchedSerializer, MarshalSerializer, 
     CloudPickleSerializer, CompressedSerializer
 from pyspark.shuffle import Aggregator, InMemoryMerger, ExternalMerger, ExternalSorter
 from pyspark.sql import SQLContext, IntegerType, Row, ArrayType, StructType, StructField, \
-    UserDefinedType, DoubleType
+    UserDefinedType, DoubleType, LongType, _infer_type
 from pyspark import shuffle
 
 _have_scipy = False
@@ -543,6 +543,12 @@ class RDDTests(ReusedPySparkTestCase):
         # regression test for bug in _reserializer()
         self.assertEqual(cnt, t.zip(rdd).count())
 
+    def test_zip_with_different_object_sizes(self):
+        # regress test for SPARK-5973
+        a = self.sc.parallelize(range(10000)).map(lambda i: '*' * i)
+        b = self.sc.parallelize(range(10000, 20000)).map(lambda i: '*' * i)
+        self.assertEqual(10000, a.zip(b).count())
+
     def test_zip_with_different_number_of_items(self):
         a = self.sc.parallelize(range(5), 2)
         # different number of partitions
@@ -713,6 +719,30 @@ class RDDTests(ReusedPySparkTestCase):
         wr_s11 = rdd.sample(True, 0.4, 11).collect()
         wr_s21 = rdd.sample(True, 0.4, 21).collect()
         self.assertNotEqual(set(wr_s11), set(wr_s21))
+
+    def test_multiple_python_java_RDD_conversions(self):
+        # Regression test for SPARK-5361
+        data = [
+            (u'1', {u'director': u'David Lean'}),
+            (u'2', {u'director': u'Andrew Dominik'})
+        ]
+        from pyspark.rdd import RDD
+        data_rdd = self.sc.parallelize(data)
+        data_java_rdd = data_rdd._to_java_object_rdd()
+        data_python_rdd = self.sc._jvm.SerDe.javaToPython(data_java_rdd)
+        converted_rdd = RDD(data_python_rdd, self.sc)
+        self.assertEqual(2, converted_rdd.count())
+
+        # conversion between python and java RDD threw exceptions
+        data_java_rdd = converted_rdd._to_java_object_rdd()
+        data_python_rdd = self.sc._jvm.SerDe.javaToPython(data_java_rdd)
+        converted_rdd = RDD(data_python_rdd, self.sc)
+        self.assertEqual(2, converted_rdd.count())
+
+    # Regression test for SPARK-6294
+    def test_take_on_jrdd(self):
+        rdd = self.sc.parallelize(range(1 << 20)).map(lambda x: str(x))
+        rdd._jrdd.first()
 
 
 class ProfilerTests(PySparkTestCase):
@@ -965,6 +995,27 @@ class SQLTests(ReusedPySparkTestCase):
         srdd1 = self.sqlCtx.parquetFile(output_dir)
         point = srdd1.first().point
         self.assertEquals(point, ExamplePoint(1.0, 2.0))
+
+    def test_infer_long_type(self):
+        longrow = [Row(f1='a', f2=100000000000000)]
+        rdd = self.sc.parallelize(longrow)
+        srdd = self.sqlCtx.inferSchema(rdd)
+        self.assertEqual(srdd.schema().fields[1].dataType, LongType())
+
+        # this saving as Parquet caused issues as well.
+        output_dir = os.path.join(self.tempdir.name, "infer_long_type")
+        srdd.saveAsParquetFile(output_dir)
+        df1 = self.sqlCtx.parquetFile(output_dir)
+        self.assertEquals('a', df1.first().f1)
+        self.assertEquals(100000000000000, df1.first().f2)
+
+        self.assertEqual(_infer_type(1), LongType())
+        self.assertEqual(_infer_type(2**10), LongType())
+        self.assertEqual(_infer_type(2**20), LongType())
+        self.assertEqual(_infer_type(2**31 - 1), LongType())
+        self.assertEqual(_infer_type(2**31), LongType())
+        self.assertEqual(_infer_type(2**61), LongType())
+        self.assertEqual(_infer_type(2**71), LongType())
 
 
 class InputFormatTests(ReusedPySparkTestCase):
