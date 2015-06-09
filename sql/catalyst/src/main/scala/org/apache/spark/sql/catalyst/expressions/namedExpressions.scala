@@ -86,7 +86,7 @@ abstract class Attribute extends NamedExpression {
   def withQualifiers(newQualifiers: Seq[String]): Attribute
   def withName(newName: String): Attribute
 
-  def toAttribute: Attribute = this
+  override def toAttribute: Attribute = this
   def newInstance(): Attribute
 
 }
@@ -103,21 +103,28 @@ abstract class Attribute extends NamedExpression {
  * @param name the name to be associated with the result of computing [[child]].
  * @param exprId A globally unique id used to check if an [[AttributeReference]] refers to this
  *               alias. Auto-assigned if left blank.
+ * @param explicitMetadata Explicit metadata associated with this alias that overwrites child's.
  */
-case class Alias(child: Expression, name: String)
-    (val exprId: ExprId = NamedExpression.newExprId, val qualifiers: Seq[String] = Nil)
+case class Alias(child: Expression, name: String)(
+    val exprId: ExprId = NamedExpression.newExprId,
+    val qualifiers: Seq[String] = Nil,
+    val explicitMetadata: Option[Metadata] = None)
   extends NamedExpression with trees.UnaryNode[Expression] {
 
   override type EvaluatedType = Any
+  // Alias(Generator, xx) need to be transformed into Generate(generator, ...)
+  override lazy val resolved = childrenResolved && !child.isInstanceOf[Generator]
 
   override def eval(input: Row): Any = child.eval(input)
 
   override def dataType: DataType = child.dataType
   override def nullable: Boolean = child.nullable
   override def metadata: Metadata = {
-    child match {
-      case named: NamedExpression => named.metadata
-      case _ => Metadata.empty
+    explicitMetadata.getOrElse {
+      child match {
+        case named: NamedExpression => named.metadata
+        case _ => Metadata.empty
+      }
     }
   }
 
@@ -131,11 +138,14 @@ case class Alias(child: Expression, name: String)
 
   override def toString: String = s"$child AS $name#${exprId.id}$typeSuffix"
 
-  override protected final def otherCopyArgs: Seq[AnyRef] = exprId :: qualifiers :: Nil
+  override protected final def otherCopyArgs: Seq[AnyRef] = {
+    exprId :: qualifiers :: explicitMetadata :: Nil
+  }
 
   override def equals(other: Any): Boolean = other match {
     case a: Alias =>
-      name == a.name && exprId == a.exprId && child == a.child && qualifiers == a.qualifiers
+      name == a.name && exprId == a.exprId && child == a.child && qualifiers == a.qualifiers &&
+        explicitMetadata == a.explicitMetadata
     case _ => false
   }
 }
@@ -161,8 +171,18 @@ case class AttributeReference(
     val exprId: ExprId = NamedExpression.newExprId,
     val qualifiers: Seq[String] = Nil) extends Attribute with trees.LeafNode[Expression] {
 
+  /**
+   * Returns true iff the expression id is the same for both attributes.
+   */
+  def sameRef(other: AttributeReference): Boolean = this.exprId == other.exprId
+
   override def equals(other: Any): Boolean = other match {
     case ar: AttributeReference => name == ar.name && exprId == ar.exprId && dataType == ar.dataType
+    case _ => false
+  }
+
+  override def semanticEquals(other: Expression): Boolean = other match {
+    case ar: AttributeReference => sameRef(ar)
     case _ => false
   }
 

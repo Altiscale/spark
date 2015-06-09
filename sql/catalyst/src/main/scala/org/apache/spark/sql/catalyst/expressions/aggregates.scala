@@ -113,7 +113,7 @@ case class MinFunction(expr: Expression, base: AggregateExpression) extends Aggr
   override def update(input: Row): Unit = {
     if (currentMin.value == null) {
       currentMin.value = expr.eval(input)
-    } else if(cmp.eval(input) == true) {
+    } else if (cmp.eval(input) == true) {
       currentMin.value = expr.eval(input)
     }
   }
@@ -144,7 +144,7 @@ case class MaxFunction(expr: Expression, base: AggregateExpression) extends Aggr
   override def update(input: Row): Unit = {
     if (currentMax.value == null) {
       currentMax.value = expr.eval(input)
-    } else if(cmp.eval(input) == true) {
+    } else if (cmp.eval(input) == true) {
       currentMax.value = expr.eval(input)
     }
   }
@@ -189,9 +189,10 @@ case class CollectHashSet(expressions: Seq[Expression]) extends AggregateExpress
 
   override def children: Seq[Expression] = expressions
   override def nullable: Boolean = false
-  override def dataType: ArrayType = ArrayType(expressions.head.dataType)
+  override def dataType: OpenHashSetUDT = new OpenHashSetUDT(expressions.head.dataType)
   override def toString: String = s"AddToHashSet(${expressions.mkString(",")})"
-  override def newInstance(): CollectHashSetFunction = new CollectHashSetFunction(expressions, this)
+  override def newInstance(): CollectHashSetFunction =
+    new CollectHashSetFunction(expressions, this)
 }
 
 case class CollectHashSetFunction(
@@ -250,11 +251,28 @@ case class CombineSetsAndCountFunction(
   override def eval(input: Row): Any = seen.size.toLong
 }
 
+/** The data type of ApproxCountDistinctPartition since its output is a HyperLogLog object. */
+private[sql] case object HyperLogLogUDT extends UserDefinedType[HyperLogLog] {
+
+  override def sqlType: DataType = BinaryType
+
+  /** Since we are using HyperLogLog internally, usually it will not be called. */
+  override def serialize(obj: Any): Array[Byte] =
+    obj.asInstanceOf[HyperLogLog].getBytes
+
+
+  /** Since we are using HyperLogLog internally, usually it will not be called. */
+  override def deserialize(datum: Any): HyperLogLog =
+    HyperLogLog.Builder.build(datum.asInstanceOf[Array[Byte]])
+
+  override def userClass: Class[HyperLogLog] = classOf[HyperLogLog]
+}
+
 case class ApproxCountDistinctPartition(child: Expression, relativeSD: Double)
   extends AggregateExpression with trees.UnaryNode[Expression] {
 
   override def nullable: Boolean = false
-  override def dataType: DataType = child.dataType
+  override def dataType: DataType = HyperLogLogUDT
   override def toString: String = s"APPROXIMATE COUNT(DISTINCT $child)"
   override def newInstance(): ApproxCountDistinctPartitionFunction = {
     new ApproxCountDistinctPartitionFunction(child, this, relativeSD)
@@ -308,7 +326,7 @@ case class Average(child: Expression) extends PartialAggregate with trees.UnaryN
 
   override def asPartial: SplitEvaluation = {
     child.dataType match {
-      case DecimalType.Fixed(_, _) =>
+      case DecimalType.Fixed(_, _) | DecimalType.Unlimited =>
         // Turn the child to unlimited decimals for calculation, before going back to fixed
         val partialSum = Alias(Sum(Cast(child, DecimalType.Unlimited)), "PartialSum")()
         val partialCount = Alias(Count(child), "PartialCount")()
@@ -354,18 +372,42 @@ case class Sum(child: Expression) extends PartialAggregate with trees.UnaryNode[
       case DecimalType.Fixed(_, _) =>
         val partialSum = Alias(Sum(Cast(child, DecimalType.Unlimited)), "PartialSum")()
         SplitEvaluation(
-          Cast(Sum(partialSum.toAttribute), dataType),
+          Cast(CombineSum(partialSum.toAttribute), dataType),
           partialSum :: Nil)
 
       case _ =>
         val partialSum = Alias(Sum(child), "PartialSum")()
         SplitEvaluation(
-          Sum(partialSum.toAttribute),
+          CombineSum(partialSum.toAttribute),
           partialSum :: Nil)
     }
   }
 
   override def newInstance(): SumFunction = new SumFunction(child, this)
+}
+
+/**
+ * Sum should satisfy 3 cases:
+ * 1) sum of all null values = zero
+ * 2) sum for table column with no data = null
+ * 3) sum of column with null and not null values = sum of not null values
+ * Require separate CombineSum Expression and function as it has to distinguish "No data" case
+ * versus "data equals null" case, while aggregating results and at each partial expression.i.e.,
+ * Combining    PartitionLevel   InputData
+ *                           <-- null
+ * Zero     <-- Zero         <-- null
+ *
+ *          <-- null         <-- no data
+ * null     <-- null         <-- no data
+ */
+case class CombineSum(child: Expression) extends AggregateExpression {
+  def this() = this(null)
+
+  override def children: Seq[Expression] = child :: Nil
+  override def nullable: Boolean = true
+  override def dataType: DataType = child.dataType
+  override def toString: String = s"CombineSum($child)"
+  override def newInstance(): CombineSumFunction = new CombineSumFunction(child, this)
 }
 
 case class SumDistinct(child: Expression)
@@ -481,7 +523,8 @@ case class AverageFunction(expr: Expression, base: AggregateExpression)
   private var count: Long = _
   private val sum = MutableLiteral(zero.eval(null), calcType)
 
-  private def addFunction(value: Any) = Add(sum, Cast(Literal(value, expr.dataType), calcType))
+  private def addFunction(value: Any) = Add(sum,
+    Cast(Literal.create(value, expr.dataType), calcType))
 
   override def eval(input: Row): Any = {
     if (count == 0L) {
@@ -575,10 +618,48 @@ case class SumFunction(expr: Expression, base: AggregateExpression) extends Aggr
 
   private val sum = MutableLiteral(null, calcType)
 
-  private val addFunction = Coalesce(Seq(Add(Coalesce(Seq(sum, zero)), Cast(expr, calcType)), sum))
+  private val addFunction =
+    Coalesce(Seq(Add(Coalesce(Seq(sum, zero)), Cast(expr, calcType)), sum, zero))
 
   override def update(input: Row): Unit = {
     sum.update(addFunction, input)
+  }
+
+  override def eval(input: Row): Any = {
+    expr.dataType match {
+      case DecimalType.Fixed(_, _) =>
+        Cast(sum, dataType).eval(null)
+      case _ => sum.eval(null)
+    }
+  }
+}
+
+case class CombineSumFunction(expr: Expression, base: AggregateExpression)
+  extends AggregateFunction {
+
+  def this() = this(null, null) // Required for serialization.
+
+  private val calcType =
+    expr.dataType match {
+      case DecimalType.Fixed(_, _) =>
+        DecimalType.Unlimited
+      case _ =>
+        expr.dataType
+    }
+
+  private val zero = Cast(Literal(0), calcType)
+
+  private val sum = MutableLiteral(null, calcType)
+
+  private val addFunction =
+    Coalesce(Seq(Add(Coalesce(Seq(sum, zero)), Cast(expr, calcType)), sum, zero))
+
+  override def update(input: Row): Unit = {
+    val result = expr.eval(input)
+    // partial sum result can be null only when no input rows present
+    if(result != null) {
+      sum.update(addFunction, input)
+    }
   }
 
   override def eval(input: Row): Any = {

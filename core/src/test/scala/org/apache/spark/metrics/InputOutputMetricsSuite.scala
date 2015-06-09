@@ -21,7 +21,7 @@ import java.io.{File, FileWriter, PrintWriter}
 
 import scala.collection.mutable.ArrayBuffer
 
-import org.apache.commons.lang.math.RandomUtils
+import org.apache.commons.lang3.RandomUtils
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.io.{LongWritable, Text}
@@ -60,7 +60,7 @@ class InputOutputMetricsSuite extends FunSuite with SharedSparkContext
     tmpFile = new File(testTempDir, getClass.getSimpleName + ".txt")
     val pw = new PrintWriter(new FileWriter(tmpFile))
     for (x <- 1 to numRecords) {
-      pw.println(RandomUtils.nextInt(numBuckets))
+      pw.println(RandomUtils.nextInt(0, numBuckets))
     }
     pw.close()
 
@@ -238,7 +238,7 @@ class InputOutputMetricsSuite extends FunSuite with SharedSparkContext
 
     sc.textFile(tmpFilePath, 4)
       .map(key => (key, 1))
-      .reduceByKey(_+_)
+      .reduceByKey(_ + _)
       .saveAsTextFile("file://" + tmpFile.getAbsolutePath)
 
     sc.listenerBus.waitUntilEmpty(500)
@@ -263,7 +263,7 @@ class InputOutputMetricsSuite extends FunSuite with SharedSparkContext
 
     val tmpRdd = sc.textFile(tmpFilePath, numPartitions)
 
-    val firstSize= runAndReturnBytesRead {
+    val firstSize = runAndReturnBytesRead {
       aRdd.count()
     }
     val secondSize = runAndReturnBytesRead {
@@ -433,10 +433,10 @@ class OldCombineTextRecordReaderWrapper(
 /**
  * Hadoop 2 has a version of this, but we can't use it for backwards compatibility
  */
-class NewCombineTextInputFormat extends NewCombineFileInputFormat[LongWritable,Text] {
+class NewCombineTextInputFormat extends NewCombineFileInputFormat[LongWritable, Text] {
   def createRecordReader(split: NewInputSplit, context: TaskAttemptContext)
   : NewRecordReader[LongWritable, Text] = {
-    new NewCombineFileRecordReader[LongWritable,Text](split.asInstanceOf[NewCombineFileSplit],
+    new NewCombineFileRecordReader[LongWritable, Text](split.asInstanceOf[NewCombineFileSplit],
       context, classOf[NewCombineTextRecordReaderWrapper])
   }
 }

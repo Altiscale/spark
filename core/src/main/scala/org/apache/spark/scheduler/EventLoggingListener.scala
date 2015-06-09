@@ -47,6 +47,7 @@ import org.apache.spark.util.{JsonProtocol, Utils}
  */
 private[spark] class EventLoggingListener(
     appId: String,
+    appAttemptId : Option[String],
     logBaseDir: URI,
     sparkConf: SparkConf,
     hadoopConf: Configuration)
@@ -54,8 +55,9 @@ private[spark] class EventLoggingListener(
 
   import EventLoggingListener._
 
-  def this(appId: String, logBaseDir: URI, sparkConf: SparkConf) =
-    this(appId, logBaseDir, sparkConf, SparkHadoopUtil.get.newConfiguration(sparkConf))
+  def this(appId: String, appAttemptId : Option[String], logBaseDir: URI, sparkConf: SparkConf) =
+    this(appId, appAttemptId, logBaseDir, sparkConf,
+      SparkHadoopUtil.get.newConfiguration(sparkConf))
 
   private val shouldCompress = sparkConf.getBoolean("spark.eventLog.compress", false)
   private val shouldOverwrite = sparkConf.getBoolean("spark.eventLog.overwrite", false)
@@ -89,13 +91,13 @@ private[spark] class EventLoggingListener(
   private[scheduler] val loggedEvents = new ArrayBuffer[JValue]
 
   // Visible for tests only.
-  private[scheduler] val logPath = getLogPath(logBaseDir, appId, compressionCodecName)
+  private[scheduler] val logPath = getLogPath(logBaseDir, appId, appAttemptId, compressionCodecName)
 
   /**
    * Creates the log file in the configured log directory.
    */
   def start() {
-    if (!fileSystem.isDirectory(new Path(logBaseDir))) {
+    if (!fileSystem.getFileStatus(new Path(logBaseDir)).isDir) {
       throw new IllegalArgumentException(s"Log directory $logBaseDir does not exist.")
     }
 
@@ -149,47 +151,60 @@ private[spark] class EventLoggingListener(
   }
 
   // Events that do not trigger a flush
-  override def onStageSubmitted(event: SparkListenerStageSubmitted) =
-    logEvent(event)
-  override def onTaskStart(event: SparkListenerTaskStart) =
-    logEvent(event)
-  override def onTaskGettingResult(event: SparkListenerTaskGettingResult) =
-    logEvent(event)
-  override def onTaskEnd(event: SparkListenerTaskEnd) =
-    logEvent(event)
-  override def onEnvironmentUpdate(event: SparkListenerEnvironmentUpdate) =
-    logEvent(event)
+  override def onStageSubmitted(event: SparkListenerStageSubmitted): Unit = logEvent(event)
+
+  override def onTaskStart(event: SparkListenerTaskStart): Unit = logEvent(event)
+
+  override def onTaskGettingResult(event: SparkListenerTaskGettingResult): Unit = logEvent(event)
+
+  override def onTaskEnd(event: SparkListenerTaskEnd): Unit = logEvent(event)
+
+  override def onEnvironmentUpdate(event: SparkListenerEnvironmentUpdate): Unit = logEvent(event)
 
   // Events that trigger a flush
-  override def onStageCompleted(event: SparkListenerStageCompleted) =
+  override def onStageCompleted(event: SparkListenerStageCompleted): Unit = {
     logEvent(event, flushLogger = true)
-  override def onJobStart(event: SparkListenerJobStart) =
+  }
+
+  override def onJobStart(event: SparkListenerJobStart): Unit = logEvent(event, flushLogger = true)
+
+  override def onJobEnd(event: SparkListenerJobEnd): Unit = logEvent(event, flushLogger = true)
+
+  override def onBlockManagerAdded(event: SparkListenerBlockManagerAdded): Unit = {
     logEvent(event, flushLogger = true)
-  override def onJobEnd(event: SparkListenerJobEnd) =
+  }
+
+  override def onBlockManagerRemoved(event: SparkListenerBlockManagerRemoved): Unit = {
     logEvent(event, flushLogger = true)
-  override def onBlockManagerAdded(event: SparkListenerBlockManagerAdded) =
+  }
+
+  override def onUnpersistRDD(event: SparkListenerUnpersistRDD): Unit = {
     logEvent(event, flushLogger = true)
-  override def onBlockManagerRemoved(event: SparkListenerBlockManagerRemoved) =
+  }
+
+  override def onApplicationStart(event: SparkListenerApplicationStart): Unit = {
     logEvent(event, flushLogger = true)
-  override def onUnpersistRDD(event: SparkListenerUnpersistRDD) =
+  }
+
+  override def onApplicationEnd(event: SparkListenerApplicationEnd): Unit = {
     logEvent(event, flushLogger = true)
-  override def onApplicationStart(event: SparkListenerApplicationStart) =
+  }
+  override def onExecutorAdded(event: SparkListenerExecutorAdded): Unit = {
     logEvent(event, flushLogger = true)
-  override def onApplicationEnd(event: SparkListenerApplicationEnd) =
+  }
+
+  override def onExecutorRemoved(event: SparkListenerExecutorRemoved): Unit = {
     logEvent(event, flushLogger = true)
-  override def onExecutorAdded(event: SparkListenerExecutorAdded) =
-    logEvent(event, flushLogger = true)
-  override def onExecutorRemoved(event: SparkListenerExecutorRemoved) =
-    logEvent(event, flushLogger = true)
+  }
 
   // No-op because logging every update would be overkill
-  override def onExecutorMetricsUpdate(event: SparkListenerExecutorMetricsUpdate) { }
+  override def onExecutorMetricsUpdate(event: SparkListenerExecutorMetricsUpdate): Unit = { }
 
   /**
    * Stop logging events. The event log file will be renamed so that it loses the
    * ".inprogress" suffix.
    */
-  def stop() = {
+  def stop(): Unit = {
     writer.foreach(_.close())
 
     val target = new Path(logPath)
@@ -239,8 +254,12 @@ private[spark] object EventLoggingListener extends Logging {
    * we won't know which codec to use to decompress the metadata needed to open the file in
    * the first place.
    *
+   * The log file name will identify the compression codec used for the contents, if any.
+   * For example, app_123 for an uncompressed log, app_123.lzf for an LZF-compressed log.
+   *
    * @param logBaseDir Directory where the log file will be written.
    * @param appId A unique app ID.
+   * @param appAttemptId A unique attempt id of appId. May be the empty string.
    * @param compressionCodecName Name to identify the codec used to compress the contents
    *                             of the log, or None if compression is not enabled.
    * @return A path which consists of file-system-safe characters.
@@ -248,11 +267,19 @@ private[spark] object EventLoggingListener extends Logging {
   def getLogPath(
       logBaseDir: URI,
       appId: String,
+      appAttemptId: Option[String],
       compressionCodecName: Option[String] = None): String = {
-    val sanitizedAppId = appId.replaceAll("[ :/]", "-").replaceAll("[.${}'\"]", "_").toLowerCase
-    // e.g. app_123, app_123.lzf
-    val logName = sanitizedAppId + compressionCodecName.map { "." + _ }.getOrElse("")
-    logBaseDir.toString.stripSuffix("/") + "/" + logName
+    val base = logBaseDir.toString.stripSuffix("/") + "/" + sanitize(appId)
+    val codec = compressionCodecName.map("." + _).getOrElse("")
+    if (appAttemptId.isDefined) {
+      base + "_" + sanitize(appAttemptId.get) + codec
+    } else {
+      base + codec
+    }
+  }
+
+  private def sanitize(str: String): String = {
+    str.replaceAll("[ :/]", "-").replaceAll("[.${}'\"]", "_").toLowerCase
   }
 
   /**

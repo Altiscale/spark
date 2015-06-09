@@ -30,6 +30,7 @@ import org.scalatest.time.SpanSugar._
 
 import org.apache.spark._
 import org.apache.spark.deploy.SparkSubmit._
+import org.apache.spark.deploy.SparkSubmitUtils.MavenCoordinate
 import org.apache.spark.util.{ResetSystemProperties, Utils}
 
 // Note: this suite mixes in ResetSystemProperties because SparkSubmit.main() sets a bunch
@@ -231,7 +232,7 @@ class SparkSubmitSuite extends FunSuite with Matchers with ResetSystemProperties
     val childArgsStr = childArgs.mkString(" ")
     if (useRest) {
       childArgsStr should endWith ("thejar.jar org.SomeClass arg1 arg2")
-      mainClass should be ("org.apache.spark.deploy.rest.StandaloneRestClient")
+      mainClass should be ("org.apache.spark.deploy.rest.RestSubmissionClient")
     } else {
       childArgsStr should startWith ("--supervise --memory 4g --cores 5")
       childArgsStr should include regex "launch spark://h:p .*thejar.jar org.SomeClass arg1 arg2"
@@ -320,7 +321,7 @@ class SparkSubmitSuite extends FunSuite with Matchers with ResetSystemProperties
     runSparkSubmit(args)
   }
 
-  test("includes jars passed in through --jars") {
+  ignore("includes jars passed in through --jars") {
     val unusedJar = TestUtils.createJarWithClasses(Seq.empty)
     val jar1 = TestUtils.createJarWithClasses(Seq("SparkSubmitClassA"))
     val jar2 = TestUtils.createJarWithClasses(Seq("SparkSubmitClassB"))
@@ -334,18 +335,23 @@ class SparkSubmitSuite extends FunSuite with Matchers with ResetSystemProperties
     runSparkSubmit(args)
   }
 
-  test("includes jars passed in through --packages") {
+  // SPARK-7287
+  ignore("includes jars passed in through --packages") {
     val unusedJar = TestUtils.createJarWithClasses(Seq.empty)
-    val packagesString = "com.databricks:spark-csv_2.10:0.1,com.databricks:spark-avro_2.10:0.1"
-    val args = Seq(
-      "--class", JarCreationTest.getClass.getName.stripSuffix("$"),
-      "--name", "testApp",
-      "--master", "local-cluster[2,1,512]",
-      "--packages", packagesString,
-      "--conf", "spark.ui.enabled=false",
-      unusedJar.toString,
-      "com.databricks.spark.csv.DefaultSource", "com.databricks.spark.avro.DefaultSource")
-    runSparkSubmit(args)
+    val main = MavenCoordinate("my.great.lib", "mylib", "0.1")
+    val dep = MavenCoordinate("my.great.dep", "mylib", "0.1")
+    IvyTestUtils.withRepository(main, Some(dep.toString), None) { repo =>
+      val args = Seq(
+        "--class", JarCreationTest.getClass.getName.stripSuffix("$"),
+        "--name", "testApp",
+        "--master", "local-cluster[2,1,512]",
+        "--packages", Seq(main, dep).mkString(","),
+        "--repositories", repo,
+        "--conf", "spark.ui.enabled=false",
+        unusedJar.toString,
+        "my.great.lib.MyLib", "my.great.dep.MyLib")
+      runSparkSubmit(args)
+    }
   }
 
   test("resolves command line argument paths correctly") {
@@ -402,8 +408,10 @@ class SparkSubmitSuite extends FunSuite with Matchers with ResetSystemProperties
     val archives = "file:/archive1,archive2" // spark.yarn.dist.archives
     val pyFiles = "py-file1,py-file2" // spark.submit.pyFiles
 
+    val tmpDir = Utils.createTempDir()
+
     // Test jars and files
-    val f1 = File.createTempFile("test-submit-jars-files", "")
+    val f1 = File.createTempFile("test-submit-jars-files", "", tmpDir)
     val writer1 = new PrintWriter(f1)
     writer1.println("spark.jars " + jars)
     writer1.println("spark.files " + files)
@@ -420,7 +428,7 @@ class SparkSubmitSuite extends FunSuite with Matchers with ResetSystemProperties
     sysProps("spark.files") should be(Utils.resolveURIs(files))
 
     // Test files and archives (Yarn)
-    val f2 = File.createTempFile("test-submit-files-archives", "")
+    val f2 = File.createTempFile("test-submit-files-archives", "", tmpDir)
     val writer2 = new PrintWriter(f2)
     writer2.println("spark.yarn.dist.files " + files)
     writer2.println("spark.yarn.dist.archives " + archives)
@@ -437,7 +445,7 @@ class SparkSubmitSuite extends FunSuite with Matchers with ResetSystemProperties
     sysProps2("spark.yarn.dist.archives") should be(Utils.resolveURIs(archives))
 
     // Test python files
-    val f3 = File.createTempFile("test-submit-python-files", "")
+    val f3 = File.createTempFile("test-submit-python-files", "", tmpDir)
     val writer3 = new PrintWriter(f3)
     writer3.println("spark.submit.pyFiles " + pyFiles)
     writer3.close()

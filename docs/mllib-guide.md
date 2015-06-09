@@ -39,6 +39,7 @@ filtering, dimensionality reduction, as well as underlying optimization primitiv
 * [Optimization (developer)](mllib-optimization.html)
   * stochastic gradient descent
   * limited-memory BFGS (L-BFGS)
+* [PMML model export](mllib-pmml-model-export.html)
 
 MLlib is under active development.
 The APIs marked `Experimental`/`DeveloperApi` may change in future releases, 
@@ -79,11 +80,6 @@ include `netlib-java`'s native proxies by default. To configure
 `-Pnetlib-lgpl`) as a dependency of your project and read the
 [netlib-java](https://github.com/fommil/netlib-java) documentation for
 your platform's additional installation instructions.
-
-MLlib also uses [jblas](https://github.com/mikiobraun/jblas) which
-will require you to install the
-[gfortran runtime library](https://github.com/mikiobraun/jblas/wiki/Missing-Libraries)
-if it is not already present on your nodes.
 
 To use MLlib in Python, you will need [NumPy](http://www.numpy.org)
 version 1.4 or newer.

@@ -37,7 +37,7 @@ class WorkerArgumentsTest extends FunSuite {
     val args = Array("spark://localhost:0000  ")
 
     class MySparkConf extends SparkConf(false) {
-      override def getenv(name: String) = {
+      override def getenv(name: String): String = {
         if (name == "SPARK_WORKER_MEMORY") "50000"
         else super.getenv(name)
       }
@@ -56,7 +56,7 @@ class WorkerArgumentsTest extends FunSuite {
     val args = Array("spark://localhost:0000  ")
 
     class MySparkConf extends SparkConf(false) {
-      override def getenv(name: String) = {
+      override def getenv(name: String): String = {
         if (name == "SPARK_WORKER_MEMORY") "5G"
         else super.getenv(name)
       }
@@ -66,7 +66,7 @@ class WorkerArgumentsTest extends FunSuite {
       }
     }
     val conf = new MySparkConf()
-    val workerArgs =  new WorkerArguments(args, conf)
+    val workerArgs = new WorkerArguments(args, conf)
     assert(workerArgs.memory === 5120)
   }
 

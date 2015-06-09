@@ -138,7 +138,7 @@ class FlumeStreamSuite extends FunSuite with BeforeAndAfter with Matchers with L
       val status = client.appendBatch(inputEvents.toList)
       status should be (avro.Status.OK)
     }
-    
+
     eventually(timeout(10 seconds), interval(100 milliseconds)) {
       val outputEvents = outputBuffer.flatten.map { _.event }
       outputEvents.foreach {
@@ -151,7 +151,9 @@ class FlumeStreamSuite extends FunSuite with BeforeAndAfter with Matchers with L
   }
 
   /** Class to create socket channel with compression */
-  private class CompressionChannelFactory(compressionLevel: Int) extends NioClientSocketChannelFactory {
+  private class CompressionChannelFactory(compressionLevel: Int)
+    extends NioClientSocketChannelFactory {
+
     override def newChannel(pipeline: ChannelPipeline): SocketChannel = {
       val encoder = new ZlibEncoder(compressionLevel)
       pipeline.addFirst("deflater", encoder)

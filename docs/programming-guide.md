@@ -41,13 +41,14 @@ In addition, if you wish to access an HDFS cluster, you need to add a dependency
     artifactId = hadoop-client
     version = <your-hdfs-version>
 
-Finally, you need to import some Spark classes and implicit conversions into your program. Add the following lines:
+Finally, you need to import some Spark classes into your program. Add the following lines:
 
 {% highlight scala %}
 import org.apache.spark.SparkContext
-import org.apache.spark.SparkContext._
 import org.apache.spark.SparkConf
 {% endhighlight %}
+
+(Before Spark 1.3.0, you need to explicitly `import org.apache.spark.SparkContext._` to enable essential implicit conversions.)
 
 </div>
 
@@ -97,9 +98,9 @@ to your version of HDFS. Some common HDFS version tags are listed on the
 [Prebuilt packages](http://spark.apache.org/downloads.html) are also available on the Spark homepage
 for common HDFS versions.
 
-Finally, you need to import some Spark classes into your program. Add the following lines:
+Finally, you need to import some Spark classes into your program. Add the following line:
 
-{% highlight scala %}
+{% highlight python %}
 from pyspark import SparkContext, SparkConf
 {% endhighlight %}
 
@@ -477,7 +478,6 @@ the [Converter examples]({{site.SPARK_GITHUB_URL}}/tree/master/examples/src/main
 for examples of using Cassandra / HBase ```InputFormat``` and ```OutputFormat``` with custom converters.
 
 </div>
-
 </div>
 
 ## RDD Operations
@@ -729,7 +729,7 @@ class MyClass(object):
     def __init__(self):
         self.field = "Hello"
     def doStuff(self, rdd):
-        return rdd.map(lambda s: self.field + x)
+        return rdd.map(lambda s: self.field + s)
 {% endhighlight %}
 
 To avoid this issue, the simplest way is to copy `field` into a local variable instead
@@ -738,13 +738,76 @@ of accessing it externally:
 {% highlight python %}
 def doStuff(self, rdd):
     field = self.field
-    return rdd.map(lambda s: field + x)
+    return rdd.map(lambda s: field + s)
 {% endhighlight %}
 
 </div>
 
 </div>
 
+### Understanding closures <a name="ClosuresLink"></a>
+One of the harder things about Spark is understanding the scope and life cycle of variables and methods when executing code across a cluster. RDD operations that modify variables outside of their scope can be a frequent source of confusion. In the example below we'll look at code that uses `foreach()` to increment a counter, but similar issues can occur for other operations as well.
+
+#### Example
+
+Consider the naive RDD element sum below, which behaves completely differently depending on whether execution is happening within the same JVM. A common example of this is when running Spark in `local` mode (`--master = local[n]`) versus deploying a Spark application to a cluster (e.g. via spark-submit to YARN): 
+
+<div class="codetabs">
+
+<div data-lang="scala"  markdown="1">
+{% highlight scala %}
+var counter = 0
+var rdd = sc.parallelize(data)
+
+// Wrong: Don't do this!!
+rdd.foreach(x => counter += x)
+
+println("Counter value: " + counter)
+{% endhighlight %}
+</div>
+
+<div data-lang="java"  markdown="1">
+{% highlight java %}
+int counter = 0;
+JavaRDD<Integer> rdd = sc.parallelize(data); 
+
+// Wrong: Don't do this!!
+rdd.foreach(x -> counter += x);
+
+println("Counter value: " + counter);
+{% endhighlight %}
+</div>
+
+<div data-lang="python"  markdown="1">
+{% highlight python %}
+counter = 0
+rdd = sc.parallelize(data)
+
+# Wrong: Don't do this!!
+rdd.foreach(lambda x: counter += x)
+
+print("Counter value: " + counter)
+
+{% endhighlight %}
+</div>
+
+</div>
+
+#### Local vs. cluster modes
+
+The primary challenge is that the behavior of the above code is undefined. In local mode with a single JVM, the above code will sum the values within the RDD and store it in **counter**. This is because both the RDD and the variable **counter** are in the same memory space on the driver node. 
+
+However, in `cluster` mode, what happens is more complicated, and the above may not work as intended. To execute jobs, Spark breaks up the processing of RDD operations into tasks - each of which is operated on by an executor. Prior to execution, Spark computes the **closure**. The closure is those variables and methods which must be visible for the executor to perform its computations on the RDD (in this case `foreach()`). This closure is serialized and sent to each executor. In `local` mode, there is only the one executors so everything shares the same closure. In other modes however, this is not the case and the executors running on seperate worker nodes each have their own copy of the closure.
+
+What is happening here is that the variables within the closure sent to each executor are now copies and thus, when **counter** is referenced within the `foreach` function, it's no longer the **counter** on the driver node. There is still a **counter** in the memory of the driver node but this is no longer visible to the executors! The executors only sees the copy from the serialized closure. Thus, the final value of **counter** will still be zero since all operations on **counter** were referencing the value within the serialized closure.  
+
+To ensure well-defined behavior in these sorts of scenarios one should use an [`Accumulator`](#AccumLink). Accumulators in Spark are used specifically to provide a mechanism for safely updating a variable when execution is split up across worker nodes in a cluster. The Accumulators section of this guide discusses these in more detail.  
+
+In general, closures - constructs like loops or locally defined methods, should not be used to mutate some global state. Spark does not define or guarantee the behavior of mutations to objects referenced from outside of closures. Some code that does this may work in local mode, but that's just by accident and such code will not behave as expected in distributed mode. Use an Accumulator instead if some global aggregation is needed.
+
+#### Printing elements of an RDD 
+Another common idiom is attempting to print out the elements of an RDD using `rdd.foreach(println)` or `rdd.map(println)`. On a single machine, this will generate the expected output and print all the RDD's elements. However, in `cluster` mode, the output to `stdout` being called by the executors is now writing to the executor's `stdout` instead, not the one on the driver, so `stdout` on the driver won't show these! To print all elements on the driver, one can use the `collect()` method to first bring the RDD to the driver node thus: `rdd.collect().foreach(println)`. This can cause the driver to run out of memory, though, because `collect()` fetches the entire RDD to a single machine; if you only need to print a few elements of the RDD, a safer approach is to use the `take()`: `rdd.take(100).foreach(println)`.
+ 
 ### Working with Key-Value Pairs
 
 <div class="codetabs">
@@ -758,11 +821,9 @@ by a key.
 
 In Scala, these operations are automatically available on RDDs containing
 [Tuple2](http://www.scala-lang.org/api/{{site.SCALA_VERSION}}/index.html#scala.Tuple2) objects
-(the built-in tuples in the language, created by simply writing `(a, b)`), as long as you
-import `org.apache.spark.SparkContext._` in your program to enable Spark's implicit
-conversions. The key-value pair operations are available in the
+(the built-in tuples in the language, created by simply writing `(a, b)`). The key-value pair operations are available in the
 [PairRDDFunctions](api/scala/index.html#org.apache.spark.rdd.PairRDDFunctions) class,
-which automatically wraps around an RDD of tuples if you import the conversions.
+which automatically wraps around an RDD of tuples.
 
 For example, the following code uses the `reduceByKey` operation on key-value pairs to count how
 many times each line of text occurs in a file:
@@ -853,7 +914,8 @@ The following table lists some of the common transformations supported by Spark.
 RDD API doc
 ([Scala](api/scala/index.html#org.apache.spark.rdd.RDD),
  [Java](api/java/index.html?org/apache/spark/api/java/JavaRDD.html),
- [Python](api/python/pyspark.html#pyspark.RDD))
+ [Python](api/python/pyspark.html#pyspark.RDD),
+ [R](api/R/index.html))
 and pair RDD functions doc
 ([Scala](api/scala/index.html#org.apache.spark.rdd.PairRDDFunctions),
  [Java](api/java/index.html?org/apache/spark/api/java/JavaPairRDD.html))
@@ -966,7 +1028,9 @@ The following table lists some of the common actions supported by Spark. Refer t
 RDD API doc
 ([Scala](api/scala/index.html#org.apache.spark.rdd.RDD),
  [Java](api/java/index.html?org/apache/spark/api/java/JavaRDD.html),
- [Python](api/python/pyspark.html#pyspark.RDD))
+ [Python](api/python/pyspark.html#pyspark.RDD),
+ [R](api/R/index.html))
+ 
 and pair RDD functions doc
 ([Scala](api/scala/index.html#org.apache.spark.rdd.PairRDDFunctions),
  [Java](api/java/index.html?org/apache/spark/api/java/JavaPairRDD.html))
@@ -1008,7 +1072,7 @@ for details.
 </tr>
 <tr>
   <td> <b>saveAsSequenceFile</b>(<i>path</i>) <br /> (Java and Scala) </td>
-  <td> Write the elements of the dataset as a Hadoop SequenceFile in a given path in the local filesystem, HDFS or any other Hadoop-supported file system. This is available on RDDs of key-value pairs that either implement Hadoop's Writable interface. In Scala, it is also
+  <td> Write the elements of the dataset as a Hadoop SequenceFile in a given path in the local filesystem, HDFS or any other Hadoop-supported file system. This is available on RDDs of key-value pairs that implement Hadoop's Writable interface. In Scala, it is also
    available on types that are implicitly convertible to Writable (Spark includes conversions for basic types like Int, Double, String, etc). </td>
 </tr>
 <tr>
@@ -1022,14 +1086,15 @@ for details.
 </tr>
 <tr>
   <td> <b>foreach</b>(<i>func</i>) </td>
-  <td> Run a function <i>func</i> on each element of the dataset. This is usually done for side effects such as updating an accumulator variable (see below) or interacting with external storage systems. </td>
+  <td> Run a function <i>func</i> on each element of the dataset. This is usually done for side effects such as updating an <a href="#AccumLink">Accumulator</a> or interacting with external storage systems. 
+  <br /><b>Note</b>: modifying variables other than Accumulators outside of the <code>foreach()</code> may result in undefined behavior. See <a href="#ClosuresLink">Understanding closures </a> for more details.</td>
 </tr>
 </table>
 
 ### Shuffle operations
 
 Certain operations within Spark trigger an event known as the shuffle. The shuffle is Spark's
-mechanism for re-distributing data so that is grouped differently across partitions. This typically
+mechanism for re-distributing data so that it's grouped differently across partitions. This typically
 involves copying data across executors and machines, making the shuffle a complex and
 costly operation.
 
@@ -1058,7 +1123,7 @@ ordered data following shuffle then it's possible to use:
 * `sortBy` to make a globally ordered RDD
 
 Operations which can cause a shuffle include **repartition** operations like
-[`repartition`](#RepartitionLink), and [`coalesce`](#CoalesceLink), **'ByKey** operations
+[`repartition`](#RepartitionLink) and [`coalesce`](#CoalesceLink), **'ByKey** operations
 (except for counting) like [`groupByKey`](#GroupByLink) and [`reduceByKey`](#ReduceByLink), and
 **join** operations like [`cogroup`](#CogroupLink) and [`join`](#JoinLink).
 
@@ -1074,7 +1139,7 @@ read the relevant sorted blocks.
         
 Certain shuffle operations can consume significant amounts of heap memory since they employ 
 in-memory data structures to organize records before or after transferring them. Specifically, 
-`reduceByKey` and `aggregateByKey` create these structures on the map side and `'ByKey` operations 
+`reduceByKey` and `aggregateByKey` create these structures on the map side, and `'ByKey` operations 
 generate these on the reduce side. When data does not fit in memory Spark will spill these tables 
 to disk, incurring the additional overhead of disk I/O and increased garbage collection.
 
@@ -1149,9 +1214,11 @@ storage levels is:
     Compared to MEMORY_ONLY_SER, OFF_HEAP reduces garbage collection overhead and allows executors
     to be smaller and to share a pool of memory, making it attractive in environments with
     large heaps or multiple concurrent applications. Furthermore, as the RDDs reside in Tachyon,
-    the crash of an executor does not lead to losing the in-memory cache. In this mode, the memory 
+    the crash of an executor does not lead to losing the in-memory cache. In this mode, the memory
     in Tachyon is discardable. Thus, Tachyon does not attempt to reconstruct a block that it evicts
-    from memory.
+    from memory. If you plan to use Tachyon as the off heap store, Spark is compatible with Tachyon
+    out-of-the-box. Please refer to this <a href="http://tachyon-project.org/master/Running-Spark-on-Tachyon.html">page</a>
+    for the suggested version pairings.
   </td>
 </tr>
 </table>
@@ -1208,6 +1275,12 @@ than shipping a copy of it with tasks. They can be used, for example, to give ev
 large input dataset in an efficient manner. Spark also attempts to distribute broadcast variables
 using efficient broadcast algorithms to reduce communication cost.
 
+Spark actions are executed through a set of stages, separated by distributed "shuffle" operations.
+Spark automatically broadcasts the common data needed by tasks within each stage. The data
+broadcasted this way is cached in serialized form and deserialized before running each task. This
+means that explicitly creating broadcast variables is only useful when tasks across multiple stages
+need the same data or when caching the data in deserialized form is important.
+
 Broadcast variables are created from a variable `v` by calling `SparkContext.broadcast(v)`. The
 broadcast variable is a wrapper around `v`, and its value can be accessed by calling the `value`
 method. The code below shows this:
@@ -1256,7 +1329,7 @@ run on the cluster so that `v` is not shipped to the nodes more than once. In ad
 `v` should not be modified after it is broadcast in order to ensure that all nodes get the same
 value of the broadcast variable (e.g. if the variable is shipped to a new node later).
 
-## Accumulators
+## Accumulators <a name="AccumLink"></a>
 
 Accumulators are variables that are only "added" to through an associative operation and can
 therefore be efficiently supported in parallel. They can be used to implement counters (as in
@@ -1401,25 +1474,28 @@ Accumulators do not change the lazy evaluation model of Spark. If they are being
 
 <div data-lang="scala"  markdown="1">
 {% highlight scala %}
-val acc = sc.accumulator(0)
-data.map(x => acc += x; f(x))
-// Here, acc is still 0 because no actions have cause the `map` to be computed.
+val accum = sc.accumulator(0)
+data.map { x => accum += x; f(x) }
+// Here, accum is still 0 because no actions have caused the `map` to be computed.
 {% endhighlight %}
 </div>
 
 <div data-lang="java"  markdown="1">
 {% highlight java %}
 Accumulator<Integer> accum = sc.accumulator(0);
-data.map(x -> accum.add(x); f(x););
-// Here, accum is still 0 because no actions have cause the `map` to be computed.
+data.map(x -> { accum.add(x); return f(x); });
+// Here, accum is still 0 because no actions have caused the `map` to be computed.
 {% endhighlight %}
 </div>
 
 <div data-lang="python"  markdown="1">
 {% highlight python %}
 accum = sc.accumulator(0)
-data.map(lambda x => acc.add(x); f(x))
-# Here, acc is still 0 because no actions have cause the `map` to be computed.
+def g(x):
+  accum.add(x)
+  return f(x)
+data.map(g)
+# Here, accum is still 0 because no actions have caused the `map` to be computed.
 {% endhighlight %}
 </div>
 
@@ -1430,6 +1506,11 @@ data.map(lambda x => acc.add(x); f(x))
 The [application submission guide](submitting-applications.html) describes how to submit applications to a cluster.
 In short, once you package your application into a JAR (for Java/Scala) or a set of `.py` or `.zip` files (for Python),
 the `bin/spark-submit` script lets you submit it to any supported cluster manager.
+
+# Launching Spark jobs from Java / Scala
+
+The [org.apache.spark.launcher](api/java/index.html?org/apache/spark/launcher/package-summary.html)
+package provides classes for launching Spark jobs as child processes using a simple Java API.
 
 # Unit Testing
 
@@ -1488,7 +1569,8 @@ You can see some [example Spark programs](http://spark.apache.org/examples.html)
 In addition, Spark includes several samples in the `examples` directory
 ([Scala]({{site.SPARK_GITHUB_URL}}/tree/master/examples/src/main/scala/org/apache/spark/examples),
  [Java]({{site.SPARK_GITHUB_URL}}/tree/master/examples/src/main/java/org/apache/spark/examples),
- [Python]({{site.SPARK_GITHUB_URL}}/tree/master/examples/src/main/python)).
+ [Python]({{site.SPARK_GITHUB_URL}}/tree/master/examples/src/main/python),
+ [R]({{site.SPARK_GITHUB_URL}}/tree/master/examples/src/main/r)).
 You can run Java and Scala examples by passing the class name to Spark's `bin/run-example` script; for instance:
 
     ./bin/run-example SparkPi
@@ -1497,6 +1579,10 @@ For Python examples, use `spark-submit` instead:
 
     ./bin/spark-submit examples/src/main/python/pi.py
 
+For R examples, use `spark-submit` instead:
+
+    ./bin/spark-submit examples/src/main/r/dataframe.R
+
 For help on optimizing your programs, the [configuration](configuration.html) and
 [tuning](tuning.html) guides provide information on best practices. They are especially important for
 making sure that your data is stored in memory in an efficient format.
@@ -1504,4 +1590,4 @@ For help on deploying, the [cluster mode overview](cluster-overview.html) descri
 in distributed operation and supported cluster managers.
 
 Finally, full API documentation is available in
-[Scala](api/scala/#org.apache.spark.package), [Java](api/java/) and [Python](api/python/).
+[Scala](api/scala/#org.apache.spark.package), [Java](api/java/), [Python](api/python/) and [R](api/R/).

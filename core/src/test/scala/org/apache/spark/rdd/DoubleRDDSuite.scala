@@ -22,6 +22,12 @@ import org.scalatest.FunSuite
 import org.apache.spark._
 
 class DoubleRDDSuite extends FunSuite with SharedSparkContext {
+  test("sum") {
+    assert(sc.parallelize(Seq.empty[Double]).sum() === 0.0)
+    assert(sc.parallelize(Seq(1.0)).sum() === 1.0)
+    assert(sc.parallelize(Seq(1.0, 2.0)).sum() === 3.0)
+  }
+
   // Verify tests on the histogram functionality. We test with both evenly
   // and non-evenly spaced buckets as the bucket lookup function changes.
   test("WorksOnEmpty") {
@@ -33,6 +39,9 @@ class DoubleRDDSuite extends FunSuite with SharedSparkContext {
     val expectedHistogramResults = Array(0)
     assert(histogramResults === expectedHistogramResults)
     assert(histogramResults2 === expectedHistogramResults)
+    val emptyRDD: RDD[Double] = sc.emptyRDD
+    assert(emptyRDD.histogram(buckets) === expectedHistogramResults)
+    assert(emptyRDD.histogram(buckets, true) === expectedHistogramResults)
   }
 
   test("WorksWithOutOfRangeWithOneBucket") {
