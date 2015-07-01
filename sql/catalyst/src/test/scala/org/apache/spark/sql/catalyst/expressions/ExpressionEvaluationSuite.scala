@@ -22,9 +22,9 @@ import java.sql.{Date, Timestamp}
 import scala.collection.immutable.HashSet
 
 import org.scalactic.TripleEqualsSupport.Spread
-import org.scalatest.FunSuite
 import org.scalatest.Matchers._
 
+import org.apache.spark.SparkFunSuite
 import org.apache.spark.sql.catalyst.CatalystTypeConverters
 import org.apache.spark.sql.catalyst.analysis.UnresolvedExtractValue
 import org.apache.spark.sql.catalyst.dsl.expressions._
@@ -33,7 +33,7 @@ import org.apache.spark.sql.catalyst.util.DateUtils
 import org.apache.spark.sql.types._
 
 
-class ExpressionEvaluationBaseSuite extends FunSuite {
+class ExpressionEvaluationBaseSuite extends SparkFunSuite {
 
   def evaluate(expression: Expression, inputRow: Row = EmptyRow): Any = {
     expression.eval(inputRow)
@@ -1356,6 +1356,11 @@ class ExpressionEvaluationSuite extends ExpressionEvaluationBaseSuite {
 
   test("atan2") {
     binaryMathFunctionEvaluation(Atan2, math.atan2)
+  }
+
+  test("random") {
+    val row = create_row(1.1, 2.0, 3.1, null)
+    checkDoubleEvaluation(Rand(30), (0.7363714192755834 +- 0.001), row)
   }
 }
 

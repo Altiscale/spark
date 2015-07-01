@@ -83,7 +83,7 @@ class LinearRegression(override val uid: String)
   setDefault(elasticNetParam -> 0.0)
 
   /**
-   * Set the maximal number of iterations.
+   * Set the maximum number of iterations.
    * Default is 100.
    * @group setParam
    */
@@ -186,6 +186,8 @@ class LinearRegression(override val uid: String)
     // TODO: Converts to sparse format based on the storage, but may base on the scoring speed.
     copyValues(new LinearRegressionModel(uid, weights.compressed, intercept))
   }
+
+  override def copy(extra: ParamMap): LinearRegression = defaultCopy(extra)
 }
 
 /**
