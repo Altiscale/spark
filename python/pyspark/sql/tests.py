@@ -1,3 +1,4 @@
+# -*- encoding: utf-8 -*-
 #
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
@@ -549,6 +550,7 @@ class SQLTests(ReusedPySparkTestCase):
         self.assertEqual(sorted(df.collect()), sorted(actual.collect()))
 
         df.write.mode("overwrite").options(noUse="this options will not be used in save.")\
+                .option("noUse", "this option will not be used in save.")\
                 .format("json").save(path=tmpPath)
         actual =\
             self.sqlCtx.read.format("json")\
@@ -581,6 +583,14 @@ class SQLTests(ReusedPySparkTestCase):
         self.assertRaises(IndexError, lambda: df[2])
         self.assertRaises(IndexError, lambda: df["bad_key"])
         self.assertRaises(TypeError, lambda: df[{}])
+
+    def test_column_name_with_non_ascii(self):
+        df = self.sqlCtx.createDataFrame([(1,)], ["数量"])
+        self.assertEqual(StructType([StructField("数量", LongType(), True)]), df.schema)
+        self.assertEqual("DataFrame[数量: bigint]", str(df))
+        self.assertEqual([("数量", 'bigint')], df.dtypes)
+        self.assertEqual(1, df.select("数量").first()[0])
+        self.assertEqual(1, df.select(df["数量"]).first()[0])
 
     def test_access_nested_types(self):
         df = self.sc.parallelize([Row(l=[1], r=Row(a=1, b="b"), d={"k": "v"})]).toDF()

@@ -19,6 +19,7 @@ fi
 
 # Options read in YARN client mode
 HADOOP_HOME=/opt/hadoop/
+HIVE_HOME=/opt/hive/
 # - HADOOP_CONF_DIR, to point Spark towards Hadoop configuration files
 HADOOP_CONF_DIR=/etc/hadoop/
 YARN_CONF_DIR=/etc/hadoop/

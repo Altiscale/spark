@@ -109,8 +109,12 @@ private[sql] object StatFunctions extends Logging {
       logWarning("The maximum limit of 1e6 pairs have been collected, which may not be all of " +
         "the pairs. Please try reducing the amount of distinct items in your columns.")
     }
+    def cleanElement(element: Any): String = {
+      if (element == null) "null" else element.toString
+    }
     // get the distinct values of column 2, so that we can make them the column names
-    val distinctCol2 = counts.map(_.get(1)).distinct.zipWithIndex.toMap
+    val distinctCol2: Map[Any, Int] =
+      counts.map(e => cleanElement(e.get(1))).distinct.zipWithIndex.toMap
     val columnSize = distinctCol2.size
     require(columnSize < 1e4, s"The number of distinct values for $col2, can't " +
       s"exceed 1e4. Currently $columnSize")
@@ -119,14 +123,24 @@ private[sql] object StatFunctions extends Logging {
       rows.foreach { (row: Row) =>
         // row.get(0) is column 1
         // row.get(1) is column 2
-        // row.get(3) is the frequency
-        countsRow.setLong(distinctCol2.get(row.get(1)).get + 1, row.getLong(2))
+        // row.get(2) is the frequency
+        val columnIndex = distinctCol2.get(cleanElement(row.get(1))).get
+        countsRow.setLong(columnIndex + 1, row.getLong(2))
       }
       // the value of col1 is the first value, the rest are the counts
-      countsRow.setString(0, col1Item.toString)
+      countsRow.setString(0, cleanElement(col1Item.toString))
       countsRow
     }.toSeq
-    val headerNames = distinctCol2.map(r => StructField(r._1.toString, LongType)).toSeq
+    // Back ticks can't exist in DataFrame column names, therefore drop them. To be able to accept
+    // special keywords and `.`, wrap the column names in ``.
+    def cleanColumnName(name: String): String = {
+      name.replace("`", "")
+    }
+    // In the map, the column names (._1) are not ordered by the index (._2). This was the bug in
+    // SPARK-8681. We need to explicitly sort by the column index and assign the column names.
+    val headerNames = distinctCol2.toSeq.sortBy(_._2).map { r =>
+      StructField(cleanColumnName(r._1.toString), LongType)
+    }
     val schema = StructType(StructField(tableName, StringType) +: headerNames)
 
     new DataFrame(df.sqlContext, LocalRelation(schema.toAttributes, table)).na.fill(0.0)
