@@ -104,6 +104,7 @@
     <module>external/flume-sink</module>
     <module>external/flume-assembly</module>
     <module>external/mqtt</module>
+    <module>external/mqtt-assembly</module>
     <module>external/zeromq</module>
     <module>examples</module>
     <module>repl</module>
@@ -2369,6 +2370,7 @@
       <id>hadoop-2.6</id>
       <properties>
         <hadoop.version>2.6.0</hadoop.version>
+        <yarn.version>2.6.0</yarn.version>
         <hive.version>1.2.1.spark</hive.version>
         <hive.version.short>1.2.1</hive.version.short>
         <jets3t.version>0.9.3</jets3t.version>
