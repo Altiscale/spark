@@ -22,7 +22,7 @@
   <parent>
     <groupId>org.apache.spark</groupId>
     <artifactId>spark-parent_2.10</artifactId>
-    <version>1.4.1</version>
+    <version>1.5.0</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
 
@@ -33,8 +33,6 @@
   <url>http://spark.apache.org/</url>
   <properties>
     <sbt.project.name>hive-thriftserver</sbt.project.name>
-    <hive.version>0.13.1a</hive.version>
-    <hive.version.short>0.13.1</hive.version.short>
   </properties>
 
   <dependencies>
@@ -57,29 +55,36 @@
     <dependency>
       <groupId>${hive.group}</groupId>
       <artifactId>hive-cli</artifactId>
-      <version>${hive.version}</version>
     </dependency>
     <dependency>
       <groupId>${hive.group}</groupId>
       <artifactId>hive-jdbc</artifactId>
-      <version>${hive.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>${hive.group}</groupId>
+      <artifactId>hive-service</artifactId>
     </dependency>
     <dependency>
       <groupId>${hive.group}</groupId>
       <artifactId>hive-beeline</artifactId>
-      <version>${hive.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.sun.jersey</groupId>
+      <artifactId>jersey-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.sun.jersey</groupId>
+      <artifactId>jersey-json</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.sun.jersey</groupId>
+      <artifactId>jersey-server</artifactId>
     </dependency>
     <!-- Added for selenium: -->
     <dependency>
       <groupId>org.seleniumhq.selenium</groupId>
       <artifactId>selenium-java</artifactId>
       <scope>test</scope>
-      <exclusions>
-        <exclusion>
-          <groupId>io.netty</groupId>
-          <artifactId>netty</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
   </dependencies>
   <build>

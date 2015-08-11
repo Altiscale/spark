@@ -64,6 +64,9 @@ trait JavaRDDLike[T, This <: JavaRDDLike[T, This]] extends Serializable {
   /** Set of partitions in this RDD. */
   def partitions: JList[Partition] = new java.util.ArrayList(rdd.partitions.toSeq)
 
+  /** The partitioner of this RDD. */
+  def partitioner: Optional[Partitioner] = JavaUtils.optionToOptional(rdd.partitioner)
+
   /** The [[org.apache.spark.SparkContext]] that this RDD was created on. */
   def context: SparkContext = rdd.context
 
@@ -361,7 +364,7 @@ trait JavaRDDLike[T, This <: JavaRDDLike[T, This]] extends Serializable {
     // This is useful for implementing `take` from other language frontends
     // like Python where the data is serialized.
     import scala.collection.JavaConversions._
-    val res = context.runJob(rdd, (it: Iterator[T]) => it.toArray, partitionIds, true)
+    val res = context.runJob(rdd, (it: Iterator[T]) => it.toArray, partitionIds)
     res.map(x => new java.util.ArrayList(x.toSeq)).toArray
   }
 

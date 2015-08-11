@@ -21,9 +21,8 @@ import java.util.NoSuchElementException
 
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.Row
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.plans._
 import org.apache.spark.sql.catalyst.plans.physical._
 import org.apache.spark.sql.execution.{BinaryNode, SparkPlan}
 import org.apache.spark.util.collection.CompactBuffer
@@ -39,15 +38,15 @@ case class SortMergeJoin(
     left: SparkPlan,
     right: SparkPlan) extends BinaryNode {
 
+  override protected[sql] val trackNumOfRowsEnabled = true
+
   override def output: Seq[Attribute] = left.output ++ right.output
 
-  override def outputPartitioning: Partitioning = left.outputPartitioning
+  override def outputPartitioning: Partitioning =
+    PartitioningCollection(Seq(left.outputPartitioning, right.outputPartitioning))
 
   override def requiredChildDistribution: Seq[Distribution] =
     ClusteredDistribution(leftKeys) :: ClusteredDistribution(rightKeys) :: Nil
-
-  // this is to manually construct an ordering that can be used to compare keys from both sides
-  private val keyOrdering: RowOrdering = RowOrdering.forSchema(leftKeys.map(_.dataType))
 
   override def outputOrdering: Seq[SortOrder] = requiredOrders(leftKeys)
 
@@ -57,32 +56,36 @@ case class SortMergeJoin(
   @transient protected lazy val leftKeyGenerator = newProjection(leftKeys, left.output)
   @transient protected lazy val rightKeyGenerator = newProjection(rightKeys, right.output)
 
-  private def requiredOrders(keys: Seq[Expression]): Seq[SortOrder] =
+  private def requiredOrders(keys: Seq[Expression]): Seq[SortOrder] = {
+    // This must be ascending in order to agree with the `keyOrdering` defined in `doExecute()`.
     keys.map(SortOrder(_, Ascending))
+  }
 
-  protected override def doExecute(): RDD[Row] = {
+  protected override def doExecute(): RDD[InternalRow] = {
     val leftResults = left.execute().map(_.copy())
     val rightResults = right.execute().map(_.copy())
 
     leftResults.zipPartitions(rightResults) { (leftIter, rightIter) =>
-      new Iterator[Row] {
+      new Iterator[InternalRow] {
+        // An ordering that can be used to compare keys from both sides.
+        private[this] val keyOrdering = newNaturalAscendingOrdering(leftKeys.map(_.dataType))
         // Mutable per row objects.
-        private[this] val joinRow = new JoinedRow5
-        private[this] var leftElement: Row = _
-        private[this] var rightElement: Row = _
-        private[this] var leftKey: Row = _
-        private[this] var rightKey: Row = _
-        private[this] var rightMatches: CompactBuffer[Row] = _
+        private[this] val joinRow = new JoinedRow
+        private[this] var leftElement: InternalRow = _
+        private[this] var rightElement: InternalRow = _
+        private[this] var leftKey: InternalRow = _
+        private[this] var rightKey: InternalRow = _
+        private[this] var rightMatches: CompactBuffer[InternalRow] = _
         private[this] var rightPosition: Int = -1
         private[this] var stop: Boolean = false
-        private[this] var matchKey: Row = _
+        private[this] var matchKey: InternalRow = _
 
         // initialize iterator
         initialize()
 
         override final def hasNext: Boolean = nextMatchingPair()
 
-        override final def next(): Row = {
+        override final def next(): InternalRow = {
           if (hasNext) {
             // we are using the buffered right rows and run down left iterator
             val joinedRow = joinRow(leftElement, rightMatches(rightPosition))
@@ -145,7 +148,7 @@ case class SortMergeJoin(
                 fetchLeft()
               }
             }
-            rightMatches = new CompactBuffer[Row]()
+            rightMatches = new CompactBuffer[InternalRow]()
             if (stop) {
               stop = false
               // iterate the right side to buffer all rows that matches

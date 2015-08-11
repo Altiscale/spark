@@ -19,6 +19,11 @@ package org.apache.spark.sql.hive
 
 import java.io.File
 
+import scala.collection.mutable.ArrayBuffer
+import scala.sys.process.{ProcessLogger, Process}
+
+import org.scalatest.exceptions.TestFailedDueToTimeoutException
+
 import org.apache.spark._
 import org.apache.spark.sql.hive.test.{TestHive, TestHiveContext}
 import org.apache.spark.util.{ResetSystemProperties, Utils}
@@ -51,7 +56,7 @@ class HiveSparkSubmitSuite
     val args = Seq(
       "--class", SparkSubmitClassLoaderTest.getClass.getName.stripSuffix("$"),
       "--name", "SparkSubmitClassLoaderTest",
-      "--master", "local-cluster[2,1,512]",
+      "--master", "local-cluster[2,1,1024]",
       "--jars", jarsString,
       unusedJar.toString, "SparkSubmitClassA", "SparkSubmitClassB")
     runSparkSubmit(args)
@@ -62,7 +67,7 @@ class HiveSparkSubmitSuite
     val args = Seq(
       "--class", SparkSQLConfTest.getClass.getName.stripSuffix("$"),
       "--name", "SparkSQLConfTest",
-      "--master", "local-cluster[2,1,512]",
+      "--master", "local-cluster[2,1,1024]",
       unusedJar.toString)
     runSparkSubmit(args)
   }
@@ -82,15 +87,39 @@ class HiveSparkSubmitSuite
   // This is copied from org.apache.spark.deploy.SparkSubmitSuite
   private def runSparkSubmit(args: Seq[String]): Unit = {
     val sparkHome = sys.props.getOrElse("spark.test.home", fail("spark.test.home is not set!"))
-    val process = Utils.executeCommand(
-      Seq("./bin/spark-submit") ++ args,
+    val history = ArrayBuffer.empty[String]
+    val commands = Seq("./bin/spark-submit") ++ args
+    val commandLine = commands.mkString("'", "' '", "'")
+    val process = Process(
+      commands,
       new File(sparkHome),
-      Map("SPARK_TESTING" -> "1", "SPARK_HOME" -> sparkHome))
+      "SPARK_TESTING" -> "1",
+      "SPARK_HOME" -> sparkHome
+    ).run(ProcessLogger(
+      // scalastyle:off println
+      (line: String) => { println(s"stdout> $line"); history += s"out> $line"},
+      (line: String) => { println(s"stderr> $line"); history += s"err> $line" }
+      // scalastyle:on println
+    ))
+
     try {
-      val exitCode = failAfter(180 seconds) { process.waitFor() }
+      val exitCode = failAfter(180.seconds) { process.exitValue() }
       if (exitCode != 0) {
-        fail(s"Process returned with exit code $exitCode. See the log4j logs for more detail.")
+        // include logs in output. Note that logging is async and may not have completed
+        // at the time this exception is raised
+        Thread.sleep(1000)
+        val historyLog = history.mkString("\n")
+        fail(s"$commandLine returned with exit code $exitCode." +
+            s" See the log4j logs for more detail." +
+            s"\n$historyLog")
       }
+    } catch {
+      case to: TestFailedDueToTimeoutException =>
+        val historyLog = history.mkString("\n")
+        fail(s"Timeout of $commandLine" +
+            s" See the log4j logs for more detail." +
+            s"\n$historyLog", to)
+        case t: Throwable => throw t
     } finally {
       // Ensure we still kill the process in case it timed out
       process.destroy()
@@ -110,8 +139,8 @@ object SparkSubmitClassLoaderTest extends Logging {
     logInfo("Testing load classes at the driver side.")
     // First, we load classes at driver side.
     try {
-      Class.forName(args(0), true, Thread.currentThread().getContextClassLoader)
-      Class.forName(args(1), true, Thread.currentThread().getContextClassLoader)
+      Utils.classForName(args(0))
+      Utils.classForName(args(1))
     } catch {
       case t: Throwable =>
         throw new Exception("Could not load user class from jar:\n", t)
@@ -121,8 +150,8 @@ object SparkSubmitClassLoaderTest extends Logging {
     val result = df.mapPartitions { x =>
       var exception: String = null
       try {
-        Class.forName(args(0), true, Thread.currentThread().getContextClassLoader)
-        Class.forName(args(1), true, Thread.currentThread().getContextClassLoader)
+        Utils.classForName(args(0))
+        Utils.classForName(args(1))
       } catch {
         case t: Throwable =>
           exception = t + "\n" + t.getStackTraceString

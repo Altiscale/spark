@@ -17,24 +17,24 @@
 
 package org.apache.spark.sql.execution
 
+import java.io.OutputStream
 import java.util.{List => JList, Map => JMap}
 
 import scala.collection.JavaConversions._
-import scala.collection.JavaConverters._
 
-import net.razorvine.pickle.{Pickler, Unpickler}
+import net.razorvine.pickle._
 
 import org.apache.spark.annotation.DeveloperApi
-import org.apache.spark.api.python.{PythonBroadcast, PythonRDD}
+import org.apache.spark.api.python.{PythonBroadcast, PythonRDD, SerDeUtil}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.catalyst.expressions.Row
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.logical
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
-import org.apache.spark.sql.catalyst.util.DateUtils
 import org.apache.spark.sql.types._
+import org.apache.spark.unsafe.types.UTF8String
 import org.apache.spark.{Accumulator, Logging => SparkLogging}
 
 /**
@@ -50,15 +50,11 @@ private[spark] case class PythonUDF(
     broadcastVars: JList[Broadcast[PythonBroadcast]],
     accumulator: Accumulator[JList[Array[Byte]]],
     dataType: DataType,
-    children: Seq[Expression]) extends Expression with SparkLogging {
+    children: Seq[Expression]) extends Expression with Unevaluable with SparkLogging {
 
   override def toString: String = s"PythonUDF#$name(${children.mkString(",")})"
 
-  def nullable: Boolean = true
-
-  override def eval(input: Row): PythonUDF.this.EvaluatedType = {
-    sys.error("PythonUDFs can not be directly evaluated.")
-  }
+  override def nullable: Boolean = true
 }
 
 /**
@@ -68,46 +64,52 @@ private[spark] case class PythonUDF(
  * This has the limitation that the input to the Python UDF is not allowed include attributes from
  * multiple child operators.
  */
-private[spark] object ExtractPythonUdfs extends Rule[LogicalPlan] {
-  def apply(plan: LogicalPlan): LogicalPlan = plan transform {
+private[spark] object ExtractPythonUDFs extends Rule[LogicalPlan] {
+  def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperators {
     // Skip EvaluatePython nodes.
-    case p: EvaluatePython => p
+    case plan: EvaluatePython => plan
 
-    case l: LogicalPlan =>
+    case plan: LogicalPlan if plan.resolved =>
       // Extract any PythonUDFs from the current operator.
-      val udfs = l.expressions.flatMap(_.collect { case udf: PythonUDF => udf})
+      val udfs = plan.expressions.flatMap(_.collect { case udf: PythonUDF => udf })
       if (udfs.isEmpty) {
         // If there aren't any, we are done.
-        l
+        plan
       } else {
         // Pick the UDF we are going to evaluate (TODO: Support evaluating multiple UDFs at a time)
         // If there is more than one, we will add another evaluation operator in a subsequent pass.
-        val udf = udfs.head
+        udfs.find(_.resolved) match {
+          case Some(udf) =>
+            var evaluation: EvaluatePython = null
 
-        var evaluation: EvaluatePython = null
+            // Rewrite the child that has the input required for the UDF
+            val newChildren = plan.children.map { child =>
+              // Check to make sure that the UDF can be evaluated with only the input of this child.
+              // Other cases are disallowed as they are ambiguous or would require a cartesian
+              // product.
+              if (udf.references.subsetOf(child.outputSet)) {
+                evaluation = EvaluatePython(udf, child)
+                evaluation
+              } else if (udf.references.intersect(child.outputSet).nonEmpty) {
+                sys.error(s"Invalid PythonUDF $udf, requires attributes from more than one child.")
+              } else {
+                child
+              }
+            }
 
-        // Rewrite the child that has the input required for the UDF
-        val newChildren = l.children.map { child =>
-          // Check to make sure that the UDF can be evaluated with only the input of this child.
-          // Other cases are disallowed as they are ambiguous or would require a cartisian product.
-          if (udf.references.subsetOf(child.outputSet)) {
-            evaluation = EvaluatePython(udf, child)
-            evaluation
-          } else if (udf.references.intersect(child.outputSet).nonEmpty) {
-            sys.error(s"Invalid PythonUDF $udf, requires attributes from more than one child.")
-          } else {
-            child
-          }
+            assert(evaluation != null, "Unable to evaluate PythonUDF.  Missing input attributes.")
+
+            // Trim away the new UDF value if it was only used for filtering or something.
+            logical.Project(
+              plan.output,
+              plan.transformExpressions {
+                case p: PythonUDF if p.fastEquals(udf) => evaluation.resultAttribute
+              }.withNewChildren(newChildren))
+
+          case None =>
+            // If there is no Python UDF that is resolved, skip this round.
+            plan
         }
-
-        assert(evaluation != null, "Unable to evaluate PythonUDF.  Missing input attributes.")
-
-        // Trim away the new UDF value if it was only used for filtering or something.
-        logical.Project(
-          l.output,
-          l.transformExpressions {
-            case p: PythonUDF if p.fastEquals(udf) => evaluation.resultAttribute
-          }.withNewChildren(newChildren))
       }
   }
 }
@@ -117,88 +119,192 @@ object EvaluatePython {
     new EvaluatePython(udf, child, AttributeReference("pythonUDF", udf.dataType)())
 
   /**
-   * Helper for converting a Scala object to a java suitable for pyspark serialization.
+   * Helper for converting from Catalyst type to java type suitable for Pyrolite.
    */
   def toJava(obj: Any, dataType: DataType): Any = (obj, dataType) match {
     case (null, _) => null
 
-    case (row: Row, struct: StructType) =>
-      val fields = struct.fields.map(field => field.dataType)
-      row.toSeq.zip(fields).map {
-        case (obj, dataType) => toJava(obj, dataType)
-      }.toArray
+    case (row: InternalRow, struct: StructType) =>
+      val values = new Array[Any](row.numFields)
+      var i = 0
+      while (i < row.numFields) {
+        values(i) = toJava(row.get(i, struct.fields(i).dataType), struct.fields(i).dataType)
+        i += 1
+      }
+      new GenericInternalRowWithSchema(values, struct)
 
-    case (seq: Seq[Any], array: ArrayType) =>
-      seq.map(x => toJava(x, array.elementType)).asJava
-    case (list: JList[_], array: ArrayType) =>
-      list.map(x => toJava(x, array.elementType)).asJava
-    case (arr, array: ArrayType) if arr.getClass.isArray =>
-      arr.asInstanceOf[Array[Any]].map(x => toJava(x, array.elementType))
+    case (a: ArrayData, array: ArrayType) =>
+      val values = new java.util.ArrayList[Any](a.numElements())
+      a.foreach(array.elementType, (_, e) => {
+        values.add(toJava(e, array.elementType))
+      })
+      values
 
-    case (obj: Map[_, _], mt: MapType) => obj.map {
-      case (k, v) => (toJava(k, mt.keyType), toJava(v, mt.valueType))
-    }.asJava
+    case (map: MapData, mt: MapType) =>
+      val jmap = new java.util.HashMap[Any, Any](map.numElements())
+      map.foreach(mt.keyType, mt.valueType, (k, v) => {
+        jmap.put(toJava(k, mt.keyType), toJava(v, mt.valueType))
+      })
+      jmap
 
-    case (ud, udt: UserDefinedType[_]) => toJava(udt.serialize(ud), udt.sqlType)
+    case (ud, udt: UserDefinedType[_]) => toJava(ud, udt.sqlType)
 
-    case (date: Int, DateType) => DateUtils.toJavaDate(date)
+    case (d: Decimal, _) => d.toJavaBigDecimal
+
     case (s: UTF8String, StringType) => s.toString
 
-    // Pyrolite can handle Timestamp and Decimal
     case (other, _) => other
   }
 
   /**
-   * Convert Row into Java Array (for pickled into Python)
+   * Converts `obj` to the type specified by the data type, or returns null if the type of obj is
+   * unexpected. Because Python doesn't enforce the type.
    */
-  def rowToArray(row: Row, fields: Seq[DataType]): Array[Any] = {
-    // TODO: this is slow!
-    row.toSeq.zip(fields).map {case (obj, dt) => toJava(obj, dt)}.toArray
-  }
-
-  // Converts value to the type specified by the data type.
-  // Because Python does not have data types for TimestampType, FloatType, ShortType, and
-  // ByteType, we need to explicitly convert values in columns of these data types to the desired
-  // JVM data types.
   def fromJava(obj: Any, dataType: DataType): Any = (obj, dataType) match {
-    // TODO: We should check nullable
     case (null, _) => null
 
-    case (c: java.util.List[_], ArrayType(elementType, _)) =>
-      c.map { e => fromJava(e, elementType)}: Seq[Any]
-
-    case (c, ArrayType(elementType, _)) if c.getClass.isArray =>
-      c.asInstanceOf[Array[_]].map(e => fromJava(e, elementType)): Seq[Any]
-
-    case (c: java.util.Map[_, _], MapType(keyType, valueType, _)) => c.map {
-      case (key, value) => (fromJava(key, keyType), fromJava(value, valueType))
-    }.toMap
-
-    case (c, StructType(fields)) if c.getClass.isArray =>
-      new GenericRow(c.asInstanceOf[Array[_]].zip(fields).map {
-        case (e, f) => fromJava(e, f.dataType)
-      }): Row
-
-    case (c: java.util.Calendar, DateType) =>
-      DateUtils.fromJavaDate(new java.sql.Date(c.getTime().getTime()))
-
-    case (c: java.util.Calendar, TimestampType) =>
-      new java.sql.Timestamp(c.getTime().getTime())
-
-    case (_, udt: UserDefinedType[_]) =>
-      fromJava(obj, udt.sqlType)
+    case (c: Boolean, BooleanType) => c
 
     case (c: Int, ByteType) => c.toByte
     case (c: Long, ByteType) => c.toByte
+
     case (c: Int, ShortType) => c.toShort
     case (c: Long, ShortType) => c.toShort
-    case (c: Long, IntegerType) => c.toInt
-    case (c: Int, LongType) => c.toLong
-    case (c: Double, FloatType) => c.toFloat
-    case (c: String, StringType) => UTF8String(c)
-    case (c, StringType) if !c.isInstanceOf[String] => UTF8String(c.toString)
 
-    case (c, _) => c
+    case (c: Int, IntegerType) => c
+    case (c: Long, IntegerType) => c.toInt
+
+    case (c: Int, LongType) => c.toLong
+    case (c: Long, LongType) => c
+
+    case (c: Double, FloatType) => c.toFloat
+
+    case (c: Double, DoubleType) => c
+
+    case (c: java.math.BigDecimal, dt: DecimalType) => Decimal(c, dt.precision, dt.scale)
+
+    case (c: Int, DateType) => c
+
+    case (c: Long, TimestampType) => c
+
+    case (c: String, StringType) => UTF8String.fromString(c)
+    case (c, StringType) =>
+      // If we get here, c is not a string. Call toString on it.
+      UTF8String.fromString(c.toString)
+
+    case (c: String, BinaryType) => c.getBytes("utf-8")
+    case (c, BinaryType) if c.getClass.isArray && c.getClass.getComponentType.getName == "byte" => c
+
+    case (c: java.util.List[_], ArrayType(elementType, _)) =>
+      new GenericArrayData(c.map { e => fromJava(e, elementType)}.toArray)
+
+    case (c, ArrayType(elementType, _)) if c.getClass.isArray =>
+      new GenericArrayData(c.asInstanceOf[Array[_]].map(e => fromJava(e, elementType)))
+
+    case (c: java.util.Map[_, _], MapType(keyType, valueType, _)) =>
+      val keys = c.keysIterator.map(fromJava(_, keyType)).toArray
+      val values = c.valuesIterator.map(fromJava(_, valueType)).toArray
+      ArrayBasedMapData(keys, values)
+
+    case (c, StructType(fields)) if c.getClass.isArray =>
+      new GenericInternalRow(c.asInstanceOf[Array[_]].zip(fields).map {
+        case (e, f) => fromJava(e, f.dataType)
+      })
+
+    case (_, udt: UserDefinedType[_]) => fromJava(obj, udt.sqlType)
+
+    // all other unexpected type should be null, or we will have runtime exception
+    // TODO(davies): we could improve this by try to cast the object to expected type
+    case (c, _) => null
+  }
+
+
+  private val module = "pyspark.sql.types"
+
+  /**
+   * Pickler for StructType
+   */
+  private class StructTypePickler extends IObjectPickler {
+
+    private val cls = classOf[StructType]
+
+    def register(): Unit = {
+      Pickler.registerCustomPickler(cls, this)
+    }
+
+    def pickle(obj: Object, out: OutputStream, pickler: Pickler): Unit = {
+      out.write(Opcodes.GLOBAL)
+      out.write((module + "\n" + "_parse_datatype_json_string" + "\n").getBytes("utf-8"))
+      val schema = obj.asInstanceOf[StructType]
+      pickler.save(schema.json)
+      out.write(Opcodes.TUPLE1)
+      out.write(Opcodes.REDUCE)
+    }
+  }
+
+  /**
+   * Pickler for InternalRow
+   */
+  private class RowPickler extends IObjectPickler {
+
+    private val cls = classOf[GenericInternalRowWithSchema]
+
+    // register this to Pickler and Unpickler
+    def register(): Unit = {
+      Pickler.registerCustomPickler(this.getClass, this)
+      Pickler.registerCustomPickler(cls, this)
+    }
+
+    def pickle(obj: Object, out: OutputStream, pickler: Pickler): Unit = {
+      if (obj == this) {
+        out.write(Opcodes.GLOBAL)
+        out.write((module + "\n" + "_create_row_inbound_converter" + "\n").getBytes("utf-8"))
+      } else {
+        // it will be memorized by Pickler to save some bytes
+        pickler.save(this)
+        val row = obj.asInstanceOf[GenericInternalRowWithSchema]
+        // schema should always be same object for memoization
+        pickler.save(row.schema)
+        out.write(Opcodes.TUPLE1)
+        out.write(Opcodes.REDUCE)
+
+        out.write(Opcodes.MARK)
+        var i = 0
+        while (i < row.values.size) {
+          pickler.save(row.values(i))
+          i += 1
+        }
+        out.write(Opcodes.TUPLE)
+        out.write(Opcodes.REDUCE)
+      }
+    }
+  }
+
+  private[this] var registered = false
+  /**
+   * This should be called before trying to serialize any above classes un cluster mode,
+   * this should be put in the closure
+   */
+  def registerPicklers(): Unit = {
+    synchronized {
+      if (!registered) {
+        SerDeUtil.initialize()
+        new StructTypePickler().register()
+        new RowPickler().register()
+        registered = true
+      }
+    }
+  }
+
+  /**
+   * Convert an RDD of Java objects to an RDD of serialized Python objects, that is usable by
+   * PySpark.
+   */
+  def javaToPython(rdd: RDD[Any]): RDD[Array[Byte]] = {
+    rdd.mapPartitions { iter =>
+      registerPicklers()  // let it called in executor
+      new SerDeUtil.AutoBatchedPickler(iter)
+    }
   }
 }
 
@@ -230,16 +336,18 @@ case class BatchPythonEvaluation(udf: PythonUDF, output: Seq[Attribute], child: 
 
   def children: Seq[SparkPlan] = child :: Nil
 
-  protected override def doExecute(): RDD[Row] = {
+  protected override def doExecute(): RDD[InternalRow] = {
     val childResults = child.execute().map(_.copy())
 
     val parent = childResults.mapPartitions { iter =>
+      EvaluatePython.registerPicklers()  // register pickler for Row
       val pickle = new Pickler
       val currentRow = newMutableProjection(udf.children, child.output)()
       val fields = udf.children.map(_.dataType)
-      iter.grouped(1000).map { inputRows =>
+      val schema = new StructType(fields.map(t => new StructField("", t, true)).toArray)
+      iter.grouped(100).map { inputRows =>
         val toBePickled = inputRows.map { row =>
-          EvaluatePython.rowToArray(currentRow(row), fields)
+          EvaluatePython.toJava(currentRow(row), schema)
         }.toArray
         pickle.dumps(toBePickled)
       }
@@ -265,7 +373,7 @@ case class BatchPythonEvaluation(udf: PythonUDF, output: Seq[Attribute], child: 
       val row = new GenericMutableRow(1)
       iter.map { result =>
         row(0) = EvaluatePython.fromJava(result, udf.dataType)
-        row: Row
+        row: InternalRow
       }
     }
 

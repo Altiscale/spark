@@ -17,15 +17,15 @@
 
 package org.apache.spark.sql.hive.execution
 
-import org.apache.spark.sql.AnalysisException
+import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.EliminateSubQueries
-import org.apache.spark.sql.catalyst.util._
-import org.apache.spark.sql.sources._
-import org.apache.spark.sql.{SaveMode, DataFrame, SQLContext}
-import org.apache.spark.sql.catalyst.expressions.{Attribute, Row}
+import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.util._
 import org.apache.spark.sql.execution.RunnableCommand
+import org.apache.spark.sql.execution.datasources.{ResolvedDataSource, LogicalRelation}
 import org.apache.spark.sql.hive.HiveContext
+import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
 import org.apache.spark.util.Utils
 
@@ -88,7 +88,7 @@ case class AddJar(path: String) extends RunnableCommand {
     val currentClassLoader = Utils.getContextOrSparkClassLoader
 
     // Add jar to current context
-    val jarURL = new java.io.File(path).toURL
+    val jarURL = new java.io.File(path).toURI.toURL
     val newClassLoader = new java.net.URLClassLoader(Array(jarURL), currentClassLoader)
     Thread.currentThread.setContextClassLoader(newClassLoader)
     // We need to explicitly set the class loader associated with the conf in executionHive's
@@ -236,7 +236,7 @@ case class CreateMetastoreDataSourceAsSelect(
     val data = DataFrame(hiveContext, query)
     val df = existingSchema match {
       // If we are inserting into an existing table, just use the existing schema.
-      case Some(schema) => sqlContext.createDataFrame(data.queryExecution.toRdd, schema)
+      case Some(schema) => sqlContext.internalCreateDataFrame(data.queryExecution.toRdd, schema)
       case None => data
     }
 

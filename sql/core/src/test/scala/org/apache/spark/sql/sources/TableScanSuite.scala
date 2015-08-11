@@ -17,7 +17,8 @@
 
 package org.apache.spark.sql.sources
 
-import java.sql.{Timestamp, Date}
+import java.nio.charset.StandardCharsets
+import java.sql.{Date, Timestamp}
 
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
@@ -64,11 +65,13 @@ case class AllDataTypesScan(
 
   override def schema: StructType = userSpecifiedSchema
 
+  override def needConversion: Boolean = true
+
   override def buildScan(): RDD[Row] = {
     sqlContext.sparkContext.parallelize(from to to).map { i =>
       Row(
         s"str_$i",
-        s"str_$i".getBytes(),
+        s"str_$i".getBytes(StandardCharsets.UTF_8),
         i % 2 == 0,
         i.toByte,
         i.toShort,
@@ -78,7 +81,7 @@ case class AllDataTypesScan(
         i.toDouble,
         new java.math.BigDecimal(i),
         new java.math.BigDecimal(i),
-        new Date(1970, 1, 1),
+        Date.valueOf("1970-01-01"),
         new Timestamp(20000 + i),
         s"varchar_$i",
         Seq(i, i + 1),
@@ -86,15 +89,16 @@ case class AllDataTypesScan(
         Map(i -> i.toString),
         Map(Map(s"str_$i" -> i.toFloat) -> Row(i.toLong)),
         Row(i, i.toString),
-        Row(Seq(s"str_$i", s"str_${i + 1}"), Row(Seq(new Date(1970, 1, i + 1)))))
+          Row(Seq(s"str_$i", s"str_${i + 1}"),
+            Row(Seq(Date.valueOf(s"1970-01-${i + 1}")))))
     }
   }
 }
 
 class TableScanSuite extends DataSourceTest {
-  import caseInsensitiveContext._
+  import caseInsensitiveContext.sql
 
-  var tableWithSchemaExpected = (1 to 10).map { i =>
+  private lazy val tableWithSchemaExpected = (1 to 10).map { i =>
     Row(
       s"str_$i",
       s"str_$i",
@@ -107,7 +111,7 @@ class TableScanSuite extends DataSourceTest {
       i.toDouble,
       new java.math.BigDecimal(i),
       new java.math.BigDecimal(i),
-      new Date(1970, 1, 1),
+      Date.valueOf("1970-01-01"),
       new Timestamp(20000 + i),
       s"varchar_$i",
       Seq(i, i + 1),
@@ -115,7 +119,7 @@ class TableScanSuite extends DataSourceTest {
       Map(i -> i.toString),
       Map(Map(s"str_$i" -> i.toFloat) -> Row(i.toLong)),
       Row(i, i.toString),
-      Row(Seq(s"str_$i", s"str_${i + 1}"), Row(Seq(new Date(1970, 1, i + 1)))))
+      Row(Seq(s"str_$i", s"str_${i + 1}"), Row(Seq(Date.valueOf(s"1970-01-${i + 1}")))))
   }.toSeq
 
   before {
@@ -196,7 +200,7 @@ class TableScanSuite extends DataSourceTest {
       StructField("longField_:,<>=+/~^", LongType, true) ::
       StructField("floatField", FloatType, true) ::
       StructField("doubleField", DoubleType, true) ::
-      StructField("decimalField1", DecimalType.Unlimited, true) ::
+      StructField("decimalField1", DecimalType.USER_DEFAULT, true) ::
       StructField("decimalField2", DecimalType(9, 2), true) ::
       StructField("dateField", DateType, true) ::
       StructField("timestampField", TimestampType, true) ::
@@ -223,7 +227,7 @@ class TableScanSuite extends DataSourceTest {
       Nil
     )
 
-    assert(expectedSchema == table("tableWithSchema").schema)
+    assert(expectedSchema == caseInsensitiveContext.table("tableWithSchema").schema)
 
     checkAnswer(
       sql(
@@ -274,11 +278,11 @@ class TableScanSuite extends DataSourceTest {
 
   sqlTest(
     "SELECT structFieldComplex.Value.`value_(2)` FROM tableWithSchema",
-    (1 to 10).map(i => Row(Seq(new Date(1970, 1, i + 1)))).toSeq)
+    (1 to 10).map(i => Row(Seq(Date.valueOf(s"1970-01-${i + 1}")))).toSeq)
 
   test("Caching")  {
     // Cached Query Execution
-    cacheTable("oneToTen")
+    caseInsensitiveContext.cacheTable("oneToTen")
     assertCached(sql("SELECT * FROM oneToTen"))
     checkAnswer(
       sql("SELECT * FROM oneToTen"),
@@ -305,7 +309,7 @@ class TableScanSuite extends DataSourceTest {
       (2 to 10).map(i => Row(i, i - 1)).toSeq)
 
     // Verify uncaching
-    uncacheTable("oneToTen")
+    caseInsensitiveContext.uncacheTable("oneToTen")
     assertCached(sql("SELECT * FROM oneToTen"), 0)
   }
 

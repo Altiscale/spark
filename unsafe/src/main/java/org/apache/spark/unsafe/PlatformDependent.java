@@ -18,6 +18,7 @@
 package org.apache.spark.unsafe;
 
 import java.lang.reflect.Field;
+import java.math.BigInteger;
 
 import sun.misc.Unsafe;
 
@@ -25,8 +26,7 @@ public final class PlatformDependent {
 
   /**
    * Facade in front of {@link sun.misc.Unsafe}, used to avoid directly exposing Unsafe outside of
-   * this package. This also lets us aovid accidental use of deprecated methods or methods that
-   * aren't present in Java 6.
+   * this package. This also lets us avoid accidental use of deprecated methods.
    */
   public static final class UNSAFE {
 
@@ -88,6 +88,14 @@ public final class PlatformDependent {
       _UNSAFE.putDouble(object, offset, value);
     }
 
+    public static Object getObjectVolatile(Object object, long offset) {
+      return _UNSAFE.getObjectVolatile(object, offset);
+    }
+
+    public static void putObjectVolatile(Object object, long offset, Object value) {
+      _UNSAFE.putObjectVolatile(object, offset, value);
+    }
+
     public static long allocateMemory(long size) {
       return _UNSAFE.allocateMemory(size);
     }
@@ -107,6 +115,10 @@ public final class PlatformDependent {
   public static final int LONG_ARRAY_OFFSET;
 
   public static final int DOUBLE_ARRAY_OFFSET;
+
+  // Support for resetting final fields while deserializing
+  public static final long BIG_INTEGER_SIGNUM_OFFSET;
+  public static final long BIG_INTEGER_MAG_OFFSET;
 
   /**
    * Limits the number of bytes to copy per {@link Unsafe#copyMemory(long, long, long)} to
@@ -130,11 +142,24 @@ public final class PlatformDependent {
       INT_ARRAY_OFFSET = _UNSAFE.arrayBaseOffset(int[].class);
       LONG_ARRAY_OFFSET = _UNSAFE.arrayBaseOffset(long[].class);
       DOUBLE_ARRAY_OFFSET = _UNSAFE.arrayBaseOffset(double[].class);
+
+      long signumOffset = 0;
+      long magOffset = 0;
+      try {
+        signumOffset = _UNSAFE.objectFieldOffset(BigInteger.class.getDeclaredField("signum"));
+        magOffset = _UNSAFE.objectFieldOffset(BigInteger.class.getDeclaredField("mag"));
+      } catch (Exception ex) {
+        // should not happen
+      }
+      BIG_INTEGER_SIGNUM_OFFSET = signumOffset;
+      BIG_INTEGER_MAG_OFFSET = magOffset;
     } else {
       BYTE_ARRAY_OFFSET = 0;
       INT_ARRAY_OFFSET = 0;
       LONG_ARRAY_OFFSET = 0;
       DOUBLE_ARRAY_OFFSET = 0;
+      BIG_INTEGER_SIGNUM_OFFSET = 0;
+      BIG_INTEGER_MAG_OFFSET = 0;
     }
   }
 
