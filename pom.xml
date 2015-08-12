@@ -136,9 +136,9 @@
     <curator.version>2.4.0</curator.version>
     <hive.group>org.spark-project.hive</hive.group>
     <!-- Version used in Maven Hive dependency -->
-    <hive.version>0.13.1a</hive.version>
+    <hive.version>1.2.1.spark</hive.version>
     <!-- Version used for internal directory structure -->
-    <hive.version.short>0.13.1</hive.version.short>
+    <hive.version.short>1.2.1</hive.version.short>
     <derby.version>10.10.1.1</derby.version>
     <parquet.version>1.7.0</parquet.version>
     <hive.parquet.version>1.6.0</hive.parquet.version>
@@ -2360,8 +2360,8 @@
       <properties>
         <hadoop.version>2.4.1</hadoop.version>
         <yarn.version>2.4.1</yarn.version>
-        <hive.version>0.13.1a</hive.version>
-        <hive.version.short>0.13.1</hive.version.short>
+        <hive.version>1.2.1.spark</hive.version>
+        <hive.version.short>1.2.1</hive.version.short>
         <jets3t.version>0.9.3</jets3t.version>
       </properties>
     </profile>
