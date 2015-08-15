@@ -2380,6 +2380,19 @@
     </profile>
 
     <profile>
+      <id>hadoop-2.7</id>
+      <properties>
+        <hadoop.version>2.7.1</hadoop.version>
+        <yarn.version>2.7.1</yarn.version>
+        <hive.version>1.2.1.spark</hive.version>
+        <hive.version.short>1.2.1</hive.version.short>
+        <jets3t.version>0.9.3</jets3t.version>
+        <zookeeper.version>3.4.6</zookeeper.version>
+        <curator.version>2.6.0</curator.version>
+      </properties>
+    </profile>
+
+    <profile>
       <id>yarn</id>
       <modules>
         <module>yarn</module>
