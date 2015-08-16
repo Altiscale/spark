@@ -34,10 +34,10 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis._
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.plans.logical.{Filter, _}
+import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.plans.{Inner, JoinType}
 import org.apache.spark.sql.catalyst.{CatalystTypeConverters, ScalaReflection, SqlParser}
-import org.apache.spark.sql.execution.{EvaluatePython, ExplainCommand, LogicalRDD, SQLExecution}
+import org.apache.spark.sql.execution.{EvaluatePython, ExplainCommand, FileRelation, LogicalRDD, SQLExecution}
 import org.apache.spark.sql.execution.datasources.{CreateTableUsingAsSelect, LogicalRelation}
 import org.apache.spark.sql.execution.datasources.json.JacksonGenerator
 import org.apache.spark.sql.sources.HadoopFsRelation
@@ -634,6 +634,7 @@ class DataFrame private[sql](
 
   /**
    * Selects column based on the column name and return it as a [[Column]].
+   * Note that the column name can also reference to a nested column like `a.b`.
    * @group dfops
    * @since 1.3.0
    */
@@ -641,6 +642,7 @@ class DataFrame private[sql](
 
   /**
    * Selects column based on the column name and return it as a [[Column]].
+   * Note that the column name can also reference to a nested column like `a.b`.
    * @group dfops
    * @since 1.3.0
    */
@@ -1560,8 +1562,10 @@ class DataFrame private[sql](
    */
   def inputFiles: Array[String] = {
     val files: Seq[String] = logicalPlan.collect {
-      case LogicalRelation(fsBasedRelation: HadoopFsRelation) =>
-        fsBasedRelation.paths.toSeq
+      case LogicalRelation(fsBasedRelation: FileRelation) =>
+        fsBasedRelation.inputFiles
+      case fr: FileRelation =>
+        fr.inputFiles
     }.flatten
     files.toSet.toArray
   }
