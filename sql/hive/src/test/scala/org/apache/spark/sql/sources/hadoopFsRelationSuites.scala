@@ -40,6 +40,8 @@ abstract class HadoopFsRelationTest extends QueryTest with SQLTestUtils {
 
   val dataSourceName: String
 
+  protected def supportsDataType(dataType: DataType): Boolean = true
+
   val dataSchema =
     StructType(
       Seq(
@@ -97,6 +99,60 @@ abstract class HadoopFsRelationTest extends QueryTest with SQLTestUtils {
             |ON l.a = r.a AND l.p1 = r.p1 AND l.p2 = r.p2
           """.stripMargin),
         for (i <- 1 to 3; p1 <- 1 to 2; p2 <- Seq("foo", "bar")) yield Row(i, s"val_$i", p1, p2))
+    }
+  }
+
+  private val supportedDataTypes = Seq(
+    StringType, BinaryType,
+    NullType, BooleanType,
+    ByteType, ShortType, IntegerType, LongType,
+    FloatType, DoubleType, DecimalType(25, 5), DecimalType(6, 5),
+    DateType, TimestampType,
+    ArrayType(IntegerType),
+    MapType(StringType, LongType),
+    new StructType()
+      .add("f1", FloatType, nullable = true)
+      .add("f2", ArrayType(BooleanType, containsNull = true), nullable = true),
+    new MyDenseVectorUDT()
+  ).filter(supportsDataType)
+
+  for (dataType <- supportedDataTypes) {
+    test(s"test all data types - $dataType") {
+      withTempPath { file =>
+        val path = file.getCanonicalPath
+
+        val dataGenerator = RandomDataGenerator.forType(
+          dataType = dataType,
+          nullable = true,
+          seed = Some(System.nanoTime())
+        ).getOrElse {
+          fail(s"Failed to create data generator for schema $dataType")
+        }
+
+        // Create a DF for the schema with random data. The index field is used to sort the
+        // DataFrame.  This is a workaround for SPARK-10591.
+        val schema = new StructType()
+          .add("index", IntegerType, nullable = false)
+          .add("col", dataType, nullable = true)
+        val rdd = sqlContext.sparkContext.parallelize((1 to 10).map(i => Row(i, dataGenerator())))
+        val df = sqlContext.createDataFrame(rdd, schema).orderBy("index").coalesce(1)
+
+        df.write
+          .mode("overwrite")
+          .format(dataSourceName)
+          .option("dataSchema", df.schema.json)
+          .save(path)
+
+        val loadedDF = sqlContext
+          .read
+          .format(dataSourceName)
+          .option("dataSchema", df.schema.json)
+          .schema(df.schema)
+          .load(path)
+          .orderBy("index")
+
+        checkAnswer(loadedDF, df)
+      }
     }
   }
 

@@ -45,7 +45,7 @@ private[spark] object RUtils {
         (sys.props("spark.master"), sys.props("spark.submit.deployMode"))
       } else {
         val sparkConf = SparkEnv.get.conf
-        (sparkConf.get("spark.master"), sparkConf.get("spark.submit.deployMode"))
+        (sparkConf.get("spark.master"), sparkConf.get("spark.submit.deployMode", "client"))
       }
 
     val isYarnCluster = master != null && master.contains("yarn") && deployMode == "cluster"
@@ -67,7 +67,11 @@ private[spark] object RUtils {
 
   /** Check if R is installed before running tests that use R commands. */
   def isRInstalled: Boolean = {
-    val builder = new ProcessBuilder(Seq("R", "--version"))
-    builder.start().waitFor() == 0
+    try {
+      val builder = new ProcessBuilder(Seq("R", "--version"))
+      builder.start().waitFor() == 0
+    } catch {
+      case e: Exception => false
+    }
   }
 }

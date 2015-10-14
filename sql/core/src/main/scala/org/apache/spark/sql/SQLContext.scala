@@ -78,6 +78,12 @@ class SQLContext(@transient val sparkContext: SparkContext)
   sparkContext.addSparkListener(listener)
   sparkContext.ui.foreach(new SQLTab(this, _))
 
+  // Execution IDs go through SparkContext's local properties, which are not safe to use with
+  // fork join pools by default. In particular, even after a child thread is spawned, if the
+  // parent sets a property the value may be reflected in the child. This leads to undefined
+  // consequences such as SPARK-10548, so we should just clone the properties instead to be safe.
+  sparkContext.conf.set("spark.localProperties.clone", "true")
+
   /**
    * Set Spark SQL configuration properties.
    *
@@ -584,7 +590,7 @@ class SQLContext(@transient val sparkContext: SparkContext)
       tableName: String,
       source: String,
       options: Map[String, String]): DataFrame = {
-    val tableIdent = new SqlParser().parseTableIdentifier(tableName)
+    val tableIdent = SqlParser.parseTableIdentifier(tableName)
     val cmd =
       CreateTableUsing(
         tableIdent,
@@ -630,7 +636,7 @@ class SQLContext(@transient val sparkContext: SparkContext)
       source: String,
       schema: StructType,
       options: Map[String, String]): DataFrame = {
-    val tableIdent = new SqlParser().parseTableIdentifier(tableName)
+    val tableIdent = SqlParser.parseTableIdentifier(tableName)
     val cmd =
       CreateTableUsing(
         tableIdent,
@@ -726,7 +732,7 @@ class SQLContext(@transient val sparkContext: SparkContext)
    * @since 1.3.0
    */
   def table(tableName: String): DataFrame = {
-    table(new SqlParser().parseTableIdentifier(tableName))
+    table(SqlParser.parseTableIdentifier(tableName))
   }
 
   private def table(tableIdent: TableIdentifier): DataFrame = {

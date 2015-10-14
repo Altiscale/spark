@@ -320,9 +320,8 @@ class DataFrame private[sql](
    * @since 1.3.0
    */
   def explain(extended: Boolean): Unit = {
-    ExplainCommand(
-      queryExecution.logical,
-      extended = extended).queryExecution.executedPlan.executeCollect().map {
+    val explain = ExplainCommand(queryExecution.logical, extended = extended)
+    explain.queryExecution.executedPlan.executeCollect().foreach {
       // scalastyle:off println
       r => println(r.getString(0))
       // scalastyle:on println
@@ -720,7 +719,7 @@ class DataFrame private[sql](
   @scala.annotation.varargs
   def selectExpr(exprs: String*): DataFrame = {
     select(exprs.map { expr =>
-      Column(new SqlParser().parseExpression(expr))
+      Column(SqlParser.parseExpression(expr))
     }: _*)
   }
 
@@ -745,7 +744,7 @@ class DataFrame private[sql](
    * @since 1.3.0
    */
   def filter(conditionExpr: String): DataFrame = {
-    filter(Column(new SqlParser().parseExpression(conditionExpr)))
+    filter(Column(SqlParser.parseExpression(conditionExpr)))
   }
 
   /**
@@ -769,7 +768,7 @@ class DataFrame private[sql](
    * @since 1.5.0
    */
   def where(conditionExpr: String): DataFrame = {
-    filter(Column(new SqlParser().parseExpression(conditionExpr)))
+    filter(Column(SqlParser.parseExpression(conditionExpr)))
   }
 
   /**

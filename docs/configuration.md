@@ -458,9 +458,12 @@ Apart from these, the following properties are also available, and may be useful
   <td><code>spark.shuffle.manager</code></td>
   <td>sort</td>
   <td>
-    Implementation to use for shuffling data. There are two implementations available:
-    <code>sort</code> and <code>hash</code>. Sort-based shuffle is more memory-efficient and is
-    the default option starting in 1.2.
+    Implementation to use for shuffling data. There are three implementations available:
+    <code>sort</code>, <code>hash</code> and the new (1.5+) <code>tungsten-sort</code>.
+    Sort-based shuffle is more memory-efficient and is the default option starting in 1.2.
+    Tungsten-sort is similar to the sort based shuffle, with a direct binary cache-friendly
+    implementation with a fall back to regular sort based shuffle if its requirements are not
+    met.
   </td>
 </tr>
 <tr>
@@ -1306,6 +1309,22 @@ Apart from these, the following properties are also available, and may be useful
   </td>
 </tr>
 <tr>
+  <td><code>spark.authenticate.enableSaslEncryption</code></td>
+  <td>false</td>
+  <td>
+    Enable encrypted communication when authentication is enabled. This option is currently
+    only supported by the block transfer service.
+  </td>
+</tr>
+<tr>
+  <td><code>spark.network.sasl.serverAlwaysEncrypt</code></td>
+  <td>false</td>
+  <td>
+    Disable unencrypted connections for services that support SASL authentication. This is
+    currently supported by the external shuffle service.
+  </td>
+</tr>
+<tr>
   <td><code>spark.core.connection.ack.wait.timeout</code></td>
   <td>60s</td>
   <td>
@@ -1437,6 +1456,19 @@ Apart from these, the following properties are also available, and may be useful
 #### Spark Streaming
 <table class="table">
 <tr><th>Property Name</th><th>Default</th><th>Meaning</th></tr>
+<tr>
+  <td><code>spark.streaming.backpressure.enabled</code></td>
+  <td>false</td>
+  <td>
+    Enables or disables Spark Streaming's internal backpressure mechanism (since 1.5).
+    This enables the Spark Streaming to control the receiving rate based on the 
+    current batch scheduling delays and processing times so that the system receives
+    only as fast as the system can process. Internally, this dynamically sets the 
+    maximum receiving rate of receivers. This rate is upper bounded by the values
+    `spark.streaming.receiver.maxRate` and `spark.streaming.kafka.maxRatePerPartition`
+    if they are set (see below).
+  </td>
+</tr>
 <tr>
   <td><code>spark.streaming.blockInterval</code></td>
   <td>200ms</td>
