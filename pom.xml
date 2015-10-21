@@ -26,7 +26,7 @@
   </parent>
   <groupId>org.apache.spark</groupId>
   <artifactId>spark-parent_2.10</artifactId>
-  <version>1.4.1</version>
+  <version>1.4.2</version>
   <packaging>pom</packaging>
   <name>Spark Project Parent POM</name>
   <url>http://spark.apache.org/</url>
@@ -144,7 +144,7 @@
     <chill.version>0.5.0</chill.version>
     <ivy.version>2.4.0</ivy.version>
     <oro.version>2.0.8</oro.version>
-    <codahale.metrics.version>3.1.0</codahale.metrics.version>
+    <codahale.metrics.version>3.1.2</codahale.metrics.version>
     <avro.version>1.7.7</avro.version>
     <avro.mapred.classifier>hadoop2</avro.mapred.classifier>
     <jets3t.version>0.9.3</jets3t.version>
@@ -162,9 +162,6 @@
     <fasterxml.jackson.version>2.4.4</fasterxml.jackson.version>
     <snappy.version>1.1.1.7</snappy.version>
     <netlib.java.version>1.1.2</netlib.java.version>
-    <!-- For maven shade plugin (see SPARK-8819) -->
-    <create.dependency.reduced.pom>false</create.dependency.reduced.pom>
-
     <test.java.home>${java.home}</test.java.home>
 
     <!--
@@ -1259,6 +1256,7 @@
               <spark.test.home>${spark.test.home}</spark.test.home>
               <spark.testing>1</spark.testing>
               <spark.ui.enabled>false</spark.ui.enabled>
+              <spark.master.rest.enabled>false</spark.master.rest.enabled>
               <spark.ui.showConsoleProgress>false</spark.ui.showConsoleProgress>
               <spark.driver.allowMultipleContexts>true</spark.driver.allowMultipleContexts>
               <spark.unsafe.exceptionOnMemoryLeak>true</spark.unsafe.exceptionOnMemoryLeak>
@@ -1294,6 +1292,7 @@
               <spark.ui.enabled>false</spark.ui.enabled>
               <spark.ui.showConsoleProgress>false</spark.ui.showConsoleProgress>
               <spark.driver.allowMultipleContexts>true</spark.driver.allowMultipleContexts>
+              <spark.unsafe.exceptionOnMemoryLeak>true</spark.unsafe.exceptionOnMemoryLeak>
             </systemProperties>
           </configuration>
           <executions>
@@ -1363,7 +1362,12 @@
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-assembly-plugin</artifactId>
-          <version>2.5.3</version>
+          <version>2.5.5</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-shade-plugin</artifactId>
+          <version>2.4.1</version>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
@@ -1427,11 +1431,8 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
-        <version>2.3</version>
         <configuration>
           <shadedArtifactAttached>false</shadedArtifactAttached>
-          <!-- Work around MSHADE-148. See SPARK-8819. -->
-          <createDependencyReducedPom>${create.dependency.reduced.pom}</createDependencyReducedPom>
           <artifactSet>
             <includes>
               <!-- At a minimum we must include this to force effective pom generation -->
@@ -1814,26 +1815,6 @@
         <scala.binary.version>2.11</scala.binary.version>
         <jline.version>2.12.1</jline.version>
         <jline.groupid>jline</jline.groupid>
-      </properties>
-    </profile>
-
-    <profile>
-      <!--
-          Use this profile only for making Spark releases. Note that due to SPARK-8819,
-          you must use maven version 3.2.x or before to avoid running into MSHADE-148.
-      -->
-      <id>release</id>
-      <properties>
-        <!--
-            The maven shade plugin has a bug where enabling the `createDependencyReducedPom`
-            property causes maven to go into an infinite loop (MSHADE-148). This is only an
-            issue for the Spark build if the maven version is 3.3.x or newer (SPARK-8819).
-
-            However, since disabling this property has the side effect of not resolving
-            variables in the released pom files (SPARK-8781), we need to enable this during
-            releases.
-        -->
-        <create.dependency.reduced.pom>true</create.dependency.reduced.pom>
       </properties>
     </profile>
 

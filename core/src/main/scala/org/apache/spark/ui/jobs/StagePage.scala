@@ -569,7 +569,7 @@ private[ui] class StagePage(parent: StagesTab) extends WebUIPage("stage") {
           serializationTimeProportionPos + serializationTimeProportion
 
         val index = taskInfo.index
-        val attempt = taskInfo.attempt
+        val attempt = taskInfo.attemptNumber
         val timelineObject =
           s"""
              {
@@ -684,7 +684,9 @@ private[ui] class StagePage(parent: StagesTab) extends WebUIPage("stage") {
       val gettingResultTime = getGettingResultTime(info)
 
       val maybeAccumulators = info.accumulables
-      val accumulatorsReadable = maybeAccumulators.map{acc => s"${acc.name}: ${acc.update.get}"}
+      val accumulatorsReadable = maybeAccumulators.map { acc =>
+        StringEscapeUtils.escapeHtml4(s"${acc.name}: ${acc.update.get}")
+      }
 
       val maybeInput = metrics.flatMap(_.inputMetrics)
       val inputSortable = maybeInput.map(_.bytesRead.toString).getOrElse("")
@@ -740,8 +742,8 @@ private[ui] class StagePage(parent: StagesTab) extends WebUIPage("stage") {
       <tr>
         <td>{info.index}</td>
         <td>{info.taskId}</td>
-        <td sorttable_customkey={info.attempt.toString}>{
-          if (info.speculative) s"${info.attempt} (speculative)" else info.attempt.toString
+        <td sorttable_customkey={info.attemptNumber.toString}>{
+          if (info.speculative) s"${info.attempt} (speculative)" else info.attemptNumber.toString
         }</td>
         <td>{info.status}</td>
         <td>{info.taskLocality}</td>

@@ -306,6 +306,10 @@ class SQLTests(ReusedPySparkTestCase):
         df = self.sqlCtx.inferSchema(rdd)
         self.assertEquals(Row(field1=1, field2=u'row1'), df.first())
 
+    def test_select_null_literal(self):
+        df = self.sqlCtx.sql("select null as col")
+        self.assertEquals(Row(col=None), df.first())
+
     def test_apply_schema(self):
         from datetime import date, datetime
         rdd = self.sc.parallelize([(127, -128, -32768, 32767, 2147483647, 1.0,
@@ -493,6 +497,16 @@ class SQLTests(ReusedPySparkTestCase):
         rndn = df.select('key', functions.randn(5)).collect()
         for row in rndn:
             assert row[1] >= -4.0 and row[1] <= 4.0, "got: %s" % row[1]
+
+        # If the specified seed is 0, we should use it.
+        # https://issues.apache.org/jira/browse/SPARK-9691
+        rnd1 = df.select('key', functions.rand(0)).collect()
+        rnd2 = df.select('key', functions.rand(0)).collect()
+        self.assertEqual(sorted(rnd1), sorted(rnd2))
+
+        rndn1 = df.select('key', functions.randn(0)).collect()
+        rndn2 = df.select('key', functions.randn(0)).collect()
+        self.assertEqual(sorted(rndn1), sorted(rndn2))
 
     def test_between_function(self):
         df = self.sc.parallelize([
@@ -885,6 +899,29 @@ class HiveContextSQLTests(ReusedPySparkTestCase):
         ]
         for r, ex in zip(rs, expected):
             self.assertEqual(tuple(r), ex[:len(r)])
+
+    def test_window_functions_without_partitionBy(self):
+        df = self.sqlCtx.createDataFrame([(1, "1"), (2, "2"), (1, "2"), (1, "2")], ["key", "value"])
+        w = Window.orderBy("key", df.value)
+        from pyspark.sql import functions as F
+        sel = df.select(df.value, df.key,
+                        F.max("key").over(w.rowsBetween(0, 1)),
+                        F.min("key").over(w.rowsBetween(0, 1)),
+                        F.count("key").over(w.rowsBetween(float('-inf'), float('inf'))),
+                        F.rowNumber().over(w),
+                        F.rank().over(w),
+                        F.denseRank().over(w),
+                        F.ntile(2).over(w))
+        rs = sorted(sel.collect())
+        expected = [
+            ("1", 1, 1, 1, 4, 1, 1, 1, 1),
+            ("2", 1, 1, 1, 4, 2, 2, 2, 1),
+            ("2", 1, 2, 1, 4, 3, 2, 2, 2),
+            ("2", 2, 2, 2, 4, 4, 4, 3, 2)
+        ]
+        for r, ex in zip(rs, expected):
+            self.assertEqual(tuple(r), ex[:len(r)])
+
 
 if __name__ == "__main__":
     unittest.main()

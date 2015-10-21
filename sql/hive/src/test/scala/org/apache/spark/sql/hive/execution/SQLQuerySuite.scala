@@ -851,6 +851,10 @@ class SQLQuerySuite extends QueryTest {
     }
   }
 
+  test("Cast STRING to BIGINT") {
+    checkAnswer(sql("SELECT CAST('775983671874188101' as BIGINT)"), Row(775983671874188101L))
+  }
+
   // `Math.exp(1.0)` has different result for different jdk version, so not use createQueryTest
   test("udf_java_method") {
     checkAnswer(sql(
@@ -933,5 +937,13 @@ class SQLQuerySuite extends QueryTest {
         fail("CREATE TEMPORARY FUNCTION should not fail.", throwable)
       case None => // OK
     }
+  }
+
+  test("SPARK-9371: fix the support for special chars in column names for hive context") {
+    TestHive.read.json(TestHive.sparkContext.makeRDD(
+      """{"a": {"c.b": 1}, "b.$q": [{"a@!.q": 1}], "q.w": {"w.i&": [1]}}""" :: Nil))
+      .registerTempTable("t")
+
+    checkAnswer(sql("SELECT a.`c.b`, `b.$q`[0].`a@!.q`, `q.w`.`w.i&`[0] FROM t"), Row(1, 1, 1))
   }
 }

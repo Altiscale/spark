@@ -189,7 +189,9 @@ class CheckpointWriter(
             + "'")
 
           // Write checkpoint to temp file
-          fs.delete(tempFile, true)   // just in case it exists
+          if (fs.exists(tempFile)) {
+            fs.delete(tempFile, true)   // just in case it exists
+          }
           val fos = fs.create(tempFile)
           Utils.tryWithSafeFinally {
             fos.write(bytes)
@@ -200,7 +202,9 @@ class CheckpointWriter(
           // If the checkpoint file exists, back it up
           // If the backup exists as well, just delete it, otherwise rename will fail
           if (fs.exists(checkpointFile)) {
-            fs.delete(backupFile, true) // just in case it exists
+            if (fs.exists(backupFile)){
+              fs.delete(backupFile, true) // just in case it exists
+            }
             if (!fs.rename(checkpointFile, backupFile)) {
               logWarning("Could not rename " + checkpointFile + " to " + backupFile)
             }
@@ -303,7 +307,7 @@ object CheckpointReader extends Logging {
 
     // Try to read the checkpoint files in the order
     logInfo("Checkpoint files found: " + checkpointFiles.mkString(","))
-    val compressionCodec = CompressionCodec.createCodec(conf)
+    var readError: Exception = null
     checkpointFiles.foreach(file => {
       logInfo("Attempting to load checkpoint from file " + file)
       try {
@@ -314,13 +318,15 @@ object CheckpointReader extends Logging {
         return Some(cp)
       } catch {
         case e: Exception =>
+          readError = e
           logWarning("Error reading checkpoint from file " + file, e)
       }
     })
 
     // If none of checkpoint files could be read, then throw exception
     if (!ignoreReadError) {
-      throw new SparkException(s"Failed to read checkpoint from directory $checkpointPath")
+      throw new SparkException(
+        s"Failed to read checkpoint from directory $checkpointPath", readError)
     }
     None
   }

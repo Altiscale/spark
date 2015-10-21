@@ -84,7 +84,7 @@ def portable_hash(x):
         h ^= len(x)
         if h == -1:
             h = -2
-        return h
+        return int(h)
     return hash(x)
 
 
@@ -699,13 +699,16 @@ class RDD(object):
         return self.map(lambda x: (f(x), x)).groupByKey(numPartitions)
 
     @ignore_unicode_prefix
-    def pipe(self, command, env={}):
+    def pipe(self, command, env=None):
         """
         Return an RDD created by piping elements to a forked external process.
 
         >>> sc.parallelize(['1', '2', '', '3']).pipe('cat').collect()
         [u'1', u'2', u'', u'3']
         """
+        if env is None:
+            env = dict()
+
         def func(iterator):
             pipe = Popen(
                 shlex.split(command), env=env, stdin=PIPE, stdout=PIPE)
@@ -849,6 +852,9 @@ class RDD(object):
             for obj in iterator:
                 acc = op(obj, acc)
             yield acc
+        # collecting result of mapPartitions here ensures that the copy of
+        # zeroValue provided to each partition is unique from the one provided
+        # to the final reduce call
         vals = self.mapPartitions(func).collect()
         return reduce(op, vals, zeroValue)
 
@@ -878,8 +884,11 @@ class RDD(object):
             for obj in iterator:
                 acc = seqOp(acc, obj)
             yield acc
-
-        return self.mapPartitions(func).fold(zeroValue, combOp)
+        # collecting result of mapPartitions here ensures that the copy of
+        # zeroValue provided to each partition is unique from the one provided
+        # to the final reduce call
+        vals = self.mapPartitions(func).collect()
+        return reduce(combOp, vals, zeroValue)
 
     def treeAggregate(self, zeroValue, seqOp, combOp, depth=2):
         """
@@ -2170,6 +2179,9 @@ class RDD(object):
         [42]
         >>> sorted.lookup(1024)
         []
+        >>> rdd2 = sc.parallelize([(('a', 'b'), 'c')]).groupByKey()
+        >>> list(rdd2.lookup(('a', 'b'))[0])
+        ['c']
         """
         values = self.filter(lambda kv: kv[0] == key).values()
 

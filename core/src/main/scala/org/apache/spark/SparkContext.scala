@@ -554,7 +554,8 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
     // Make sure the context is stopped if the user forgets about it. This avoids leaving
     // unfinished event logs around after the JVM exits cleanly. It doesn't help if the JVM
     // is killed, though.
-    _shutdownHookRef = Utils.addShutdownHook(Utils.SPARK_CONTEXT_SHUTDOWN_PRIORITY) { () =>
+    _shutdownHookRef = ShutdownHookManager.addShutdownHook(
+      ShutdownHookManager.SPARK_CONTEXT_SHUTDOWN_PRIORITY) { () =>
       logInfo("Invoking stop() from shutdown hook")
       stop()
     }
@@ -1627,36 +1628,60 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
       return
     }
     if (_shutdownHookRef != null) {
-      Utils.removeShutdownHook(_shutdownHookRef)
+      ShutdownHookManager.removeShutdownHook(_shutdownHookRef)
     }
 
-    postApplicationEnd()
-    _ui.foreach(_.stop())
+    Utils.tryLogNonFatalError {
+      postApplicationEnd()
+    }
+    Utils.tryLogNonFatalError {
+      _ui.foreach(_.stop())
+    }
     if (env != null) {
-      env.metricsSystem.report()
+      Utils.tryLogNonFatalError {
+        env.metricsSystem.report()
+      }
     }
     if (metadataCleaner != null) {
-      metadataCleaner.cancel()
+      Utils.tryLogNonFatalError {
+        metadataCleaner.cancel()
+      }
     }
-    _cleaner.foreach(_.stop())
-    _executorAllocationManager.foreach(_.stop())
+    Utils.tryLogNonFatalError {
+      _cleaner.foreach(_.stop())
+    }
+    Utils.tryLogNonFatalError {
+      _executorAllocationManager.foreach(_.stop())
+    }
     if (_dagScheduler != null) {
-      _dagScheduler.stop()
+      Utils.tryLogNonFatalError {
+        _dagScheduler.stop()
+      }
       _dagScheduler = null
     }
     if (_listenerBusStarted) {
-      listenerBus.stop()
-      _listenerBusStarted = false
+      Utils.tryLogNonFatalError {
+        listenerBus.stop()
+        _listenerBusStarted = false
+      }
     }
-    _eventLogger.foreach(_.stop())
+    Utils.tryLogNonFatalError {
+      _eventLogger.foreach(_.stop())
+    }
     if (env != null && _heartbeatReceiver != null) {
-      env.rpcEnv.stop(_heartbeatReceiver)
+      Utils.tryLogNonFatalError {
+        env.rpcEnv.stop(_heartbeatReceiver)
+      }
     }
-    _progressBar.foreach(_.stop())
+    Utils.tryLogNonFatalError {
+      _progressBar.foreach(_.stop())
+    }
     _taskScheduler = null
     // TODO: Cache.stop()?
     if (_env != null) {
-      _env.stop()
+      Utils.tryLogNonFatalError {
+        _env.stop()
+      }
       SparkEnv.set(null)
     }
     SparkContext.clearActiveContext()

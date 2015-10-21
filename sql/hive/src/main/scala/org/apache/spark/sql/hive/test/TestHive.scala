@@ -36,7 +36,7 @@ import org.apache.spark.sql.execution.CacheTableCommand
 import org.apache.spark.sql.hive._
 import org.apache.spark.sql.hive.execution.HiveNativeCommand
 import org.apache.spark.sql.SQLConf
-import org.apache.spark.util.Utils
+import org.apache.spark.util.{ShutdownHookManager, Utils}
 import org.apache.spark.{SparkConf, SparkContext}
 
 import scala.collection.mutable
@@ -53,9 +53,10 @@ object TestHive
       "TestSQLContext",
       new SparkConf()
         .set("spark.sql.test", "")
-        .set(
-          "spark.sql.hive.metastore.barrierPrefixes",
-          "org.apache.spark.sql.hive.execution.PairSerDe")))
+        .set("spark.sql.hive.metastore.barrierPrefixes",
+          "org.apache.spark.sql.hive.execution.PairSerDe")
+        // SPARK-8910
+        .set("spark.ui.enabled", "false")))
 
 /**
  * A locally running test instance of Spark's Hive execution engine.
@@ -145,7 +146,7 @@ class TestHiveContext(sc: SparkContext) extends HiveContext(sc) {
   val hiveFilesTemp = File.createTempFile("catalystHiveFiles", "")
   hiveFilesTemp.delete()
   hiveFilesTemp.mkdir()
-  Utils.registerShutdownDeleteDir(hiveFilesTemp)
+  ShutdownHookManager.registerShutdownDeleteDir(hiveFilesTemp)
 
   val inRepoTests = if (System.getProperty("user.dir").endsWith("sql" + File.separator + "hive")) {
     new File("src" + File.separator + "test" + File.separator + "resources" + File.separator)
