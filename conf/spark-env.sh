@@ -9,7 +9,7 @@ JAVA_HOME=/usr/java/default
 # This file is sourced when running various Spark programs.
 # Copy it as spark-env.sh and edit that to configure Spark for your site.
 if [ "x${SPARK_VERSION}" = "x" ] ; then
-  SPARK_VERSION="1.5.1"
+  SPARK_VERSION="1.5.2"
 fi
 
 # - SPARK_CLASSPATH, default classpath entries to append
