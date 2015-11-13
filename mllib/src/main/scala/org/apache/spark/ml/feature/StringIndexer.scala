@@ -33,7 +33,8 @@ import org.apache.spark.util.collection.OpenHashMap
 /**
  * Base trait for [[StringIndexer]] and [[StringIndexerModel]].
  */
-private[feature] trait StringIndexerBase extends Params with HasInputCol with HasOutputCol {
+private[feature] trait StringIndexerBase extends Params with HasInputCol with HasOutputCol
+    with HasHandleInvalid {
 
   /** Validates and transforms the input schema. */
   protected def validateAndTransformSchema(schema: StructType): StructType = {
@@ -68,12 +69,15 @@ class StringIndexer(override val uid: String) extends Estimator[StringIndexerMod
   def this() = this(Identifiable.randomUID("strIdx"))
 
   /** @group setParam */
+  def setHandleInvalid(value: String): this.type = set(handleInvalid, value)
+  setDefault(handleInvalid, "error")
+
+  /** @group setParam */
   def setInputCol(value: String): this.type = set(inputCol, value)
 
   /** @group setParam */
   def setOutputCol(value: String): this.type = set(outputCol, value)
 
-  // TODO: handle unseen labels
 
   override def fit(dataset: DataFrame): StringIndexerModel = {
     val counts = dataset.select(col($(inputCol)).cast(StringType))
@@ -98,7 +102,7 @@ class StringIndexer(override val uid: String) extends Estimator[StringIndexerMod
  * [[StringIndexerModel.transform]] would return the input dataset unmodified.
  * This is a temporary fix for the case when target labels do not exist during prediction.
  *
- * @param labels  Ordered list of labels, corresponding to indices to be assigned
+ * @param labels  Ordered list of labels, corresponding to indices to be assigned.
  */
 @Experimental
 class StringIndexerModel (
@@ -119,6 +123,10 @@ class StringIndexerModel (
   }
 
   /** @group setParam */
+  def setHandleInvalid(value: String): this.type = set(handleInvalid, value)
+  setDefault(handleInvalid, "error")
+
+  /** @group setParam */
   def setInputCol(value: String): this.type = set(inputCol, value)
 
   /** @group setParam */
@@ -135,15 +143,24 @@ class StringIndexerModel (
       if (labelToIndex.contains(label)) {
         labelToIndex(label)
       } else {
-        // TODO: handle unseen labels
         throw new SparkException(s"Unseen label: $label.")
       }
     }
-    val outputColName = $(outputCol)
+
     val metadata = NominalAttribute.defaultAttr
-      .withName(outputColName).withValues(labels).toMetadata()
-    dataset.select(col("*"),
-      indexer(dataset($(inputCol)).cast(StringType)).as(outputColName, metadata))
+      .withName($(inputCol)).withValues(labels).toMetadata()
+    // If we are skipping invalid records, filter them out.
+    val filteredDataset = (getHandleInvalid) match {
+      case "skip" => {
+        val filterer = udf { label: String =>
+          labelToIndex.contains(label)
+        }
+        dataset.where(filterer(dataset($(inputCol))))
+      }
+      case _ => dataset
+    }
+    filteredDataset.select(col("*"),
+      indexer(dataset($(inputCol)).cast(StringType)).as($(outputCol), metadata))
   }
 
   override def transformSchema(schema: StructType): StructType = {
@@ -163,10 +180,10 @@ class StringIndexerModel (
 
 /**
  * :: Experimental ::
- * A [[Transformer]] that maps a column of string indices back to a new column of corresponding
- * string values using either the ML attributes of the input column, or if provided using the labels
- * supplied by the user.
- * All original columns are kept during transformation.
+ * A [[Transformer]] that maps a column of indices back to a new column of corresponding
+ * string values.
+ * The index-string mapping is either from the ML attributes of the input column,
+ * or from user-supplied labels (which take precedence over ML attributes).
  *
  * @see [[StringIndexer]] for converting strings into indices
  */
@@ -184,32 +201,23 @@ class IndexToString private[ml] (
   /** @group setParam */
   def setOutputCol(value: String): this.type = set(outputCol, value)
 
-  /**
-   * Optional labels to be provided by the user, if not supplied column
-   * metadata is read for labels. The default value is an empty array,
-   * but the empty array is ignored and column metadata used instead.
-   * @group setParam
-   */
+  /** @group setParam */
   def setLabels(value: Array[String]): this.type = set(labels, value)
 
   /**
-   * Param for array of labels.
-   * Optional labels to be provided by the user.
-   * Default: Empty array, in which case column metadata is used for labels.
+   * Optional param for array of labels specifying index-string mapping.
+   *
+   * Default: Empty array, in which case [[inputCol]] metadata is used for labels.
    * @group param
    */
   final val labels: StringArrayParam = new StringArrayParam(this, "labels",
-    "array of labels, if not provided metadata from inputCol is used instead.")
+    "Optional array of labels specifying index-string mapping." +
+      " If not provided or if empty, then metadata from inputCol is used instead.")
   setDefault(labels, Array.empty[String])
 
-  /**
-   * Optional labels to be provided by the user, if not supplied column
-   * metadata is read for labels.
-   * @group getParam
-   */
+  /** @group getParam */
   final def getLabels: Array[String] = $(labels)
 
-  /** Transform the schema for the inverse transformation */
   override def transformSchema(schema: StructType): StructType = {
     val inputColName = $(inputCol)
     val inputDataType = schema(inputColName).dataType

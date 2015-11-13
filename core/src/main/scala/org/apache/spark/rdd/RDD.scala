@@ -31,7 +31,7 @@ import org.apache.hadoop.mapred.TextOutputFormat
 
 import org.apache.spark._
 import org.apache.spark.Partitioner._
-import org.apache.spark.annotation.{DeveloperApi, Experimental}
+import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.api.java.JavaRDD
 import org.apache.spark.partial.BoundedDouble
 import org.apache.spark.partial.CountEvaluator
@@ -473,50 +473,44 @@ abstract class RDD[T: ClassTag](
    * @param seed seed for the random number generator
    * @return sample of specified size in an array
    */
-  // TODO: rewrite this without return statements so we can wrap it in a scope
   def takeSample(
       withReplacement: Boolean,
       num: Int,
-      seed: Long = Utils.random.nextLong): Array[T] = {
+      seed: Long = Utils.random.nextLong): Array[T] = withScope {
     val numStDev = 10.0
 
-    if (num < 0) {
-      throw new IllegalArgumentException("Negative number of elements requested")
-    } else if (num == 0) {
-      return new Array[T](0)
+    require(num >= 0, "Negative number of elements requested")
+    require(num <= (Int.MaxValue - (numStDev * math.sqrt(Int.MaxValue)).toInt),
+      "Cannot support a sample size > Int.MaxValue - " +
+      s"$numStDev * math.sqrt(Int.MaxValue)")
+
+    if (num == 0) {
+      new Array[T](0)
+    } else {
+      val initialCount = this.count()
+      if (initialCount == 0) {
+        new Array[T](0)
+      } else {
+        val rand = new Random(seed)
+        if (!withReplacement && num >= initialCount) {
+          Utils.randomizeInPlace(this.collect(), rand)
+        } else {
+          val fraction = SamplingUtils.computeFractionForSampleSize(num, initialCount,
+            withReplacement)
+          var samples = this.sample(withReplacement, fraction, rand.nextInt()).collect()
+
+          // If the first sample didn't turn out large enough, keep trying to take samples;
+          // this shouldn't happen often because we use a big multiplier for the initial size
+          var numIters = 0
+          while (samples.length < num) {
+            logWarning(s"Needed to re-sample due to insufficient sample size. Repeat #$numIters")
+            samples = this.sample(withReplacement, fraction, rand.nextInt()).collect()
+            numIters += 1
+          }
+          Utils.randomizeInPlace(samples, rand).take(num)
+        }
+      }
     }
-
-    val initialCount = this.count()
-    if (initialCount == 0) {
-      return new Array[T](0)
-    }
-
-    val maxSampleSize = Int.MaxValue - (numStDev * math.sqrt(Int.MaxValue)).toInt
-    if (num > maxSampleSize) {
-      throw new IllegalArgumentException("Cannot support a sample size > Int.MaxValue - " +
-        s"$numStDev * math.sqrt(Int.MaxValue)")
-    }
-
-    val rand = new Random(seed)
-    if (!withReplacement && num >= initialCount) {
-      return Utils.randomizeInPlace(this.collect(), rand)
-    }
-
-    val fraction = SamplingUtils.computeFractionForSampleSize(num, initialCount,
-      withReplacement)
-
-    var samples = this.sample(withReplacement, fraction, rand.nextInt()).collect()
-
-    // If the first sample didn't turn out large enough, keep trying to take samples;
-    // this shouldn't happen often because we use a big multiplier for the initial size
-    var numIters = 0
-    while (samples.length < num) {
-      logWarning(s"Needed to re-sample due to insufficient sample size. Repeat #$numIters")
-      samples = this.sample(withReplacement, fraction, rand.nextInt()).collect()
-      numIters += 1
-    }
-
-    Utils.randomizeInPlace(samples, rand).take(num)
   }
 
   /**
@@ -1125,11 +1119,9 @@ abstract class RDD[T: ClassTag](
   def count(): Long = sc.runJob(this, Utils.getIteratorSize _).sum
 
   /**
-   * :: Experimental ::
    * Approximate version of count() that returns a potentially incomplete result
    * within a timeout, even if not all tasks have finished.
    */
-  @Experimental
   def countApprox(
       timeout: Long,
       confidence: Double = 0.95): PartialResult[BoundedDouble] = withScope {
@@ -1158,10 +1150,8 @@ abstract class RDD[T: ClassTag](
   }
 
   /**
-   * :: Experimental ::
    * Approximate version of countByValue().
    */
-  @Experimental
   def countByValueApprox(timeout: Long, confidence: Double = 0.95)
       (implicit ord: Ordering[T] = null)
       : PartialResult[Map[T, BoundedDouble]] = withScope {
@@ -1180,7 +1170,6 @@ abstract class RDD[T: ClassTag](
   }
 
   /**
-   * :: Experimental ::
    * Return approximate number of distinct elements in the RDD.
    *
    * The algorithm used is based on streamlib's implementation of "HyperLogLog in Practice:
@@ -1196,7 +1185,6 @@ abstract class RDD[T: ClassTag](
    * @param sp The precision value for the sparse set, between 0 and 32.
    *           If `sp` equals 0, the sparse representation is skipped.
    */
-  @Experimental
   def countApproxDistinct(p: Int, sp: Int): Long = withScope {
     require(p >= 4, s"p ($p) must be >= 4")
     require(sp <= 32, s"sp ($sp) must be <= 32")
@@ -1687,7 +1675,7 @@ abstract class RDD[T: ClassTag](
       import Utils.bytesToString
 
       val persistence = if (storageLevel != StorageLevel.NONE) storageLevel.description else ""
-      val storageInfo = rdd.context.getRDDStorageInfo.filter(_.id == rdd.id).map(info =>
+      val storageInfo = rdd.context.getRDDStorageInfo(_.id == rdd.id).map(info =>
         "    CachedPartitions: %d; MemorySize: %s; ExternalBlockStoreSize: %s; DiskSize: %s".format(
           info.numCachedPartitions, bytesToString(info.memSize),
           bytesToString(info.externalBlockStoreSize), bytesToString(info.diskSize)))

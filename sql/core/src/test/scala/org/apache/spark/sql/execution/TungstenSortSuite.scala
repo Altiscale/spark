@@ -29,19 +29,7 @@ import org.apache.spark.sql.types._
  * A test suite that generates randomized data to test the [[TungstenSort]] operator.
  */
 class TungstenSortSuite extends SparkPlanTest with SharedSQLContext {
-
-  override def beforeAll(): Unit = {
-    super.beforeAll()
-    ctx.conf.setConf(SQLConf.CODEGEN_ENABLED, true)
-  }
-
-  override def afterAll(): Unit = {
-    try {
-      ctx.conf.setConf(SQLConf.CODEGEN_ENABLED, SQLConf.CODEGEN_ENABLED.defaultValue.get)
-    } finally {
-      super.afterAll()
-    }
-  }
+  import testImplicits.localSeqToDataFrameHolder
 
   test("sort followed by limit") {
     checkThatPlansAgree(
@@ -64,8 +52,7 @@ class TungstenSortSuite extends SparkPlanTest with SharedSQLContext {
   }
 
   test("sorting updates peak execution memory") {
-    val sc = ctx.sparkContext
-    AccumulatorSuite.verifyPeakExecutionMemorySet(sc, "unsafe external sort") {
+    AccumulatorSuite.verifyPeakExecutionMemorySet(sparkContext, "unsafe external sort") {
       checkThatPlansAgree(
         (1 to 100).map(v => Tuple1(v)).toDF("a"),
         (child: SparkPlan) => TungstenSort('a.asc :: Nil, true, child),
@@ -83,11 +70,10 @@ class TungstenSortSuite extends SparkPlanTest with SharedSQLContext {
   ) {
     test(s"sorting on $dataType with nullable=$nullable, sortOrder=$sortOrder") {
       val inputData = Seq.fill(1000)(randomDataGenerator())
-      val inputDf = ctx.createDataFrame(
-        ctx.sparkContext.parallelize(Random.shuffle(inputData).map(v => Row(v))),
+      val inputDf = sqlContext.createDataFrame(
+        sparkContext.parallelize(Random.shuffle(inputData).map(v => Row(v))),
         StructType(StructField("a", dataType, nullable = true) :: Nil)
       )
-      assert(TungstenSort.supportsSchema(inputDf.schema))
       checkThatPlansAgree(
         inputDf,
         plan => ConvertToSafe(

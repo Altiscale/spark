@@ -136,6 +136,38 @@ class DateTimeUtilsSuite extends SparkFunSuite {
     assert(stringToDate(UTF8String.fromString("2015-031-8")).isEmpty)
   }
 
+  test("string to time") {
+    // Tests with UTC.
+    var c = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+    c.set(Calendar.MILLISECOND, 0)
+
+    c.set(1900, 0, 1, 0, 0, 0)
+    assert(stringToTime("1900-01-01T00:00:00GMT-00:00") === c.getTime())
+
+    c.set(2000, 11, 30, 10, 0, 0)
+    assert(stringToTime("2000-12-30T10:00:00Z") === c.getTime())
+
+    // Tests with set time zone.
+    c.setTimeZone(TimeZone.getTimeZone("GMT-04:00"))
+    c.set(Calendar.MILLISECOND, 0)
+
+    c.set(1900, 0, 1, 0, 0, 0)
+    assert(stringToTime("1900-01-01T00:00:00-04:00") === c.getTime())
+
+    c.set(1900, 0, 1, 0, 0, 0)
+    assert(stringToTime("1900-01-01T00:00:00GMT-04:00") === c.getTime())
+
+    // Tests with local time zone.
+    c.setTimeZone(TimeZone.getDefault())
+    c.set(Calendar.MILLISECOND, 0)
+
+    c.set(2000, 11, 30, 0, 0, 0)
+    assert(stringToTime("2000-12-30") === new Date(c.getTimeInMillis()))
+
+    c.set(2000, 11, 30, 10, 0, 0)
+    assert(stringToTime("2000-12-30 10:00:00") === new Timestamp(c.getTimeInMillis()))
+  }
+
   test("string to timestamp") {
     var c = Calendar.getInstance()
     c.set(1969, 11, 31, 16, 0, 0)
@@ -324,6 +356,19 @@ class DateTimeUtilsSuite extends SparkFunSuite {
     assert(getSeconds(c.getTimeInMillis * 1000) === 11)
     c.set(2015, 2, 8, 2, 7, 9)
     assert(getSeconds(c.getTimeInMillis * 1000) === 9)
+  }
+
+  test("hours / miniute / seconds") {
+    Seq(Timestamp.valueOf("2015-06-11 10:12:35.789"),
+      Timestamp.valueOf("2015-06-11 20:13:40.789"),
+      Timestamp.valueOf("1900-06-11 12:14:50.789"),
+      Timestamp.valueOf("1700-02-28 12:14:50.123456")).foreach { t =>
+      val us = fromJavaTimestamp(t)
+      assert(toJavaTimestamp(us) === t)
+      assert(getHours(us) === t.getHours)
+      assert(getMinutes(us) === t.getMinutes)
+      assert(getSeconds(us) === t.getSeconds)
+    }
   }
 
   test("get day in year") {

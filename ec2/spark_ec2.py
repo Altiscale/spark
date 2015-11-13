@@ -51,7 +51,7 @@ else:
     raw_input = input
     xrange = range
 
-SPARK_EC2_VERSION = "1.5.1"
+SPARK_EC2_VERSION = "1.5.0"
 SPARK_EC2_DIR = os.path.dirname(os.path.realpath(__file__))
 
 VALID_SPARK_VERSIONS = set([
@@ -72,9 +72,7 @@ VALID_SPARK_VERSIONS = set([
     "1.3.1",
     "1.4.0",
     "1.4.1",
-    "1.5.0",
-    "1.5.1",
-    "1.5.2"
+    "1.5.0"
 ])
 
 SPARK_TACHYON_MAP = {
@@ -89,9 +87,7 @@ SPARK_TACHYON_MAP = {
     "1.3.1": "0.5.0",
     "1.4.0": "0.6.4",
     "1.4.1": "0.6.4",
-    "1.5.0": "0.7.1",
-    "1.5.1": "0.7.1",
-    "1.5.2": "0.7.1"
+    "1.5.0": "0.7.1"
 }
 
 DEFAULT_SPARK_VERSION = SPARK_EC2_VERSION
@@ -185,6 +181,10 @@ def parse_args():
     parser.add_option(
         "-i", "--identity-file",
         help="SSH private key file to use for logging into instances")
+    parser.add_option(
+        "-p", "--profile", default=None,
+        help="If you have multiple profiles (AWS or boto config), you can configure " +
+             "additional, named profiles by using this option (default: %default)")
     parser.add_option(
         "-t", "--instance-type", default="m1.large",
         help="Type of instance to launch (default: %default). " +
@@ -1319,7 +1319,10 @@ def real_main():
         sys.exit(1)
 
     try:
-        conn = ec2.connect_to_region(opts.region)
+        if opts.profile is None:
+            conn = ec2.connect_to_region(opts.region)
+        else:
+            conn = ec2.connect_to_region(opts.region, profile_name=opts.profile)
     except Exception as e:
         print((e), file=stderr)
         sys.exit(1)
