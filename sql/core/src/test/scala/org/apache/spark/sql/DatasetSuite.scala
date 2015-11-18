@@ -24,21 +24,6 @@ import scala.language.postfixOps
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.test.SharedSQLContext
 
-case class ClassData(a: String, b: Int)
-
-/**
- * A class used to test serialization using encoders. This class throws exceptions when using
- * Java serialization -- so the only way it can be "serialized" is through our encoders.
- */
-case class NonSerializableCaseClass(value: String) extends Externalizable {
-  override def readExternal(in: ObjectInput): Unit = {
-    throw new UnsupportedOperationException
-  }
-
-  override def writeExternal(out: ObjectOutput): Unit = {
-    throw new UnsupportedOperationException
-  }
-}
 
 class DatasetSuite extends QueryTest with SharedSQLContext {
   import testImplicits._
@@ -99,8 +84,7 @@ class DatasetSuite extends QueryTest with SharedSQLContext {
       ("a", 2), ("b", 3), ("c", 4))
   }
 
-  ignore("Dataset should set the resolved encoders internally for maps") {
-    // TODO: Enable this once we fix SPARK-11793.
+  test("map and group by with class data") {
     // We inject a group by here to make sure this test case is future proof
     // when we implement better pipelining and local execution mode.
     val ds: Dataset[(ClassData, Long)] = Seq(ClassData("one", 1), ClassData("two", 2)).toDS()
@@ -109,7 +93,7 @@ class DatasetSuite extends QueryTest with SharedSQLContext {
 
     checkAnswer(
       ds,
-      (ClassData("one", 1), 1L), (ClassData("two", 2), 1L))
+      (ClassData("one", 2), 1L), (ClassData("two", 3), 1L))
   }
 
   test("select") {
@@ -362,8 +346,63 @@ class DatasetSuite extends QueryTest with SharedSQLContext {
     checkAnswer(joined, ("2", 2))
   }
 
+  test("self join") {
+    val ds = Seq("1", "2").toDS().as("a")
+    val joined = ds.joinWith(ds, lit(true))
+    checkAnswer(joined, ("1", "1"), ("1", "2"), ("2", "1"), ("2", "2"))
+  }
+
   test("toString") {
     val ds = Seq((1, 2)).toDS()
     assert(ds.toString == "[_1: int, _2: int]")
   }
+
+  test("kryo encoder") {
+    implicit val kryoEncoder = Encoders.kryo[KryoData]
+    val ds = Seq(KryoData(1), KryoData(2)).toDS()
+
+    assert(ds.groupBy(p => p).count().collect().toSeq ==
+      Seq((KryoData(1), 1L), (KryoData(2), 1L)))
+  }
+
+  test("kryo encoder self join") {
+    implicit val kryoEncoder = Encoders.kryo[KryoData]
+    val ds = Seq(KryoData(1), KryoData(2)).toDS()
+    assert(ds.joinWith(ds, lit(true)).collect().toSet ==
+      Set(
+        (KryoData(1), KryoData(1)),
+        (KryoData(1), KryoData(2)),
+        (KryoData(2), KryoData(1)),
+        (KryoData(2), KryoData(2))))
+  }
+}
+
+
+case class ClassData(a: String, b: Int)
+
+/**
+ * A class used to test serialization using encoders. This class throws exceptions when using
+ * Java serialization -- so the only way it can be "serialized" is through our encoders.
+ */
+case class NonSerializableCaseClass(value: String) extends Externalizable {
+  override def readExternal(in: ObjectInput): Unit = {
+    throw new UnsupportedOperationException
+  }
+
+  override def writeExternal(out: ObjectOutput): Unit = {
+    throw new UnsupportedOperationException
+  }
+}
+
+/** Used to test Kryo encoder. */
+class KryoData(val a: Int) {
+  override def equals(other: Any): Boolean = {
+    a == other.asInstanceOf[KryoData].a
+  }
+  override def hashCode: Int = a
+  override def toString: String = s"KryoData($a)"
+}
+
+object KryoData {
+  def apply(a: Int): KryoData = new KryoData(a)
 }
