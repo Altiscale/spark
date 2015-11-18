@@ -22,6 +22,7 @@ import scala.collection.JavaConverters._
 import org.apache.spark.annotation.Experimental
 import org.apache.spark.rdd.RDD
 import org.apache.spark.api.java.function._
+import org.apache.spark.sql.catalyst.InternalRow
 
 import org.apache.spark.sql.catalyst.encoders._
 import org.apache.spark.sql.catalyst.expressions._
@@ -203,7 +204,7 @@ class Dataset[T] private[sql](
       sqlContext,
       MapPartitions[T, U](
         func,
-        encoderFor[T],
+        resolvedTEncoder,
         encoderFor[U],
         encoderFor[U].schema.toAttributes,
         logicalPlan))
@@ -299,7 +300,7 @@ class Dataset[T] private[sql](
    */
   def groupBy[K : Encoder](func: T => K): GroupedDataset[K, T] = {
     val inputPlan = queryExecution.analyzed
-    val withGroupingKey = AppendColumn(func, resolvedTEncoder, inputPlan)
+    val withGroupingKey = AppendColumns(func, resolvedTEncoder, inputPlan)
     val executed = sqlContext.executePlan(withGroupingKey)
 
     new GroupedDataset(
@@ -364,13 +365,11 @@ class Dataset[T] private[sql](
    * @since 1.6.0
    */
   def select[U1: Encoder](c1: TypedColumn[T, U1]): Dataset[U1] = {
-    // We use an unbound encoder since the expression will make up its own schema.
-    // TODO: This probably doesn't work if we are relying on reordering of the input class fields.
     new Dataset[U1](
       sqlContext,
       Project(
         c1.withInputType(
-          resolvedTEncoder.bind(queryExecution.analyzed.output),
+          resolvedTEncoder,
           queryExecution.analyzed.output).named :: Nil,
         logicalPlan))
   }
@@ -382,10 +381,8 @@ class Dataset[T] private[sql](
    */
   protected def selectUntyped(columns: TypedColumn[_, _]*): Dataset[_] = {
     val encoders = columns.map(_.encoder)
-    // We use an unbound encoder since the expression will make up its own schema.
-    // TODO: This probably doesn't work if we are relying on reordering of the input class fields.
     val namedColumns =
-      columns.map(_.withInputType(unresolvedTEncoder, queryExecution.analyzed.output).named)
+      columns.map(_.withInputType(resolvedTEncoder, queryExecution.analyzed.output).named)
     val execution = new QueryExecution(sqlContext, Project(namedColumns, logicalPlan))
 
     new Dataset(sqlContext, execution, ExpressionEncoder.tuple(encoders))
@@ -522,7 +519,7 @@ class Dataset[T] private[sql](
    * Returns the first element in this [[Dataset]].
    * @since 1.6.0
    */
-  def first(): T = rdd.first()
+  def first(): T = take(1).head
 
   /**
    * Returns an array that contains all the elements in this [[Dataset]].
@@ -533,7 +530,14 @@ class Dataset[T] private[sql](
    * For Java API, use [[collectAsList]].
    * @since 1.6.0
    */
-  def collect(): Array[T] = rdd.collect()
+  def collect(): Array[T] = {
+    // This is different from Dataset.rdd in that it collects Rows, and then runs the encoders
+    // to convert the rows into objects of type T.
+    val tEnc = resolvedTEncoder
+    val input = queryExecution.analyzed.output
+    val bound = tEnc.bind(input)
+    queryExecution.toRdd.map(_.copy()).collect().map(bound.fromRow)
+  }
 
   /**
    * Returns an array that contains all the elements in this [[Dataset]].
@@ -544,7 +548,7 @@ class Dataset[T] private[sql](
    * For Java API, use [[collectAsList]].
    * @since 1.6.0
    */
-  def collectAsList(): java.util.List[T] = rdd.collect().toSeq.asJava
+  def collectAsList(): java.util.List[T] = collect().toSeq.asJava
 
   /**
    * Returns the first `num` elements of this [[Dataset]] as an array.
@@ -554,7 +558,7 @@ class Dataset[T] private[sql](
    *
    * @since 1.6.0
    */
-  def take(num: Int): Array[T] = rdd.take(num)
+  def take(num: Int): Array[T] = withPlan(Limit(Literal(num), _)).collect()
 
   /**
    * Returns the first `num` elements of this [[Dataset]] as an array.
