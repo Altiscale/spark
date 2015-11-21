@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
+import java.util.Collections
+
 import org.apache.parquet.column.{Encoding, ParquetProperties}
 
 import scala.collection.JavaConverters._
@@ -31,7 +33,7 @@ import org.apache.parquet.example.data.{Group, GroupWriter}
 import org.apache.parquet.hadoop._
 import org.apache.parquet.hadoop.api.WriteSupport
 import org.apache.parquet.hadoop.api.WriteSupport.WriteContext
-import org.apache.parquet.hadoop.metadata.CompressionCodecName
+import org.apache.parquet.hadoop.metadata.{FileMetaData, ParquetMetadata, CompressionCodecName}
 import org.apache.parquet.io.api.RecordConsumer
 import org.apache.parquet.schema.{MessageType, MessageTypeParser}
 
@@ -248,6 +250,31 @@ class ParquetIOSuite extends QueryTest with ParquetTest with SharedSQLContext {
         sqlContext.read.parquet(path.toString).printSchema()
       }.toString
       assert(errorMessage.contains("Parquet type not supported"))
+    }
+  }
+
+  test("SPARK-11692 Support for Parquet logical types, JSON and BSON (embedded types)") {
+    val parquetSchema = MessageTypeParser.parseMessageType(
+      """message root {
+        |  required binary a(JSON);
+        |  required binary b(BSON);
+        |}
+      """.stripMargin)
+
+    withTempPath { location =>
+      val extraMetadata = Map.empty[String, String].asJava
+      val fileMetadata = new FileMetaData(parquetSchema, extraMetadata, "Spark")
+      val path = new Path(location.getCanonicalPath)
+      val footer = List(
+        new Footer(path, new ParquetMetadata(fileMetadata, Collections.emptyList()))
+      ).asJava
+
+      ParquetFileWriter.writeMetadataFile(sparkContext.hadoopConfiguration, path, footer)
+
+      val jsonDataType = sqlContext.read.parquet(path.toString).schema(0).dataType
+      assert(jsonDataType === StringType)
+      val bsonDataType = sqlContext.read.parquet(path.toString).schema(1).dataType
+      assert(bsonDataType === BinaryType)
     }
   }
 
@@ -557,6 +584,25 @@ class ParquetIOSuite extends QueryTest with ParquetTest with SharedSQLContext {
         hadoopConfiguration.clear()
         clonedConf.asScala.foreach(entry => hadoopConfiguration.set(entry.getKey, entry.getValue))
       }
+    }
+  }
+
+  test("null and non-null strings") {
+    // Create a dataset where the first values are NULL and then some non-null values. The
+    // number of non-nulls needs to be bigger than the ParquetReader batch size.
+    val data = sqlContext.range(200).map { i =>
+      if (i.getLong(0) < 150) Row(None)
+      else Row("a")
+    }
+    val df = sqlContext.createDataFrame(data, StructType(StructField("col", StringType) :: Nil))
+    assert(df.agg("col" -> "count").collect().head.getLong(0) == 50)
+
+    withTempPath { dir =>
+      val path = s"${dir.getCanonicalPath}/data"
+      df.write.parquet(path)
+
+      val df2 = sqlContext.read.parquet(path)
+      assert(df2.agg("col" -> "count").collect().head.getLong(0) == 50)
     }
   }
 
