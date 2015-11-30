@@ -170,7 +170,7 @@ public class JavaDatasetSuite implements Serializable {
       }
     }, Encoders.INT());
 
-    Dataset<String> mapped = grouped.map(new MapGroupFunction<Integer, String, String>() {
+    Dataset<String> mapped = grouped.mapGroups(new MapGroupsFunction<Integer, String, String>() {
       @Override
       public String call(Integer key, Iterator<String> values) throws Exception {
         StringBuilder sb = new StringBuilder(key.toString());
@@ -183,8 +183,8 @@ public class JavaDatasetSuite implements Serializable {
 
     Assert.assertEquals(Arrays.asList("1a", "3foobar"), mapped.collectAsList());
 
-    Dataset<String> flatMapped = grouped.flatMap(
-      new FlatMapGroupFunction<Integer, String, String>() {
+    Dataset<String> flatMapped = grouped.flatMapGroups(
+      new FlatMapGroupsFunction<Integer, String, String>() {
         @Override
         public Iterable<String> call(Integer key, Iterator<String> values) throws Exception {
           StringBuilder sb = new StringBuilder(key.toString());
@@ -247,10 +247,10 @@ public class JavaDatasetSuite implements Serializable {
     List<String> data = Arrays.asList("a", "foo", "bar");
     Dataset<String> ds = context.createDataset(data, Encoders.STRING());
     GroupedDataset<Integer, String> grouped =
-      ds.groupBy(length(col("value"))).asKey(Encoders.INT());
+      ds.groupBy(length(col("value"))).keyAs(Encoders.INT());
 
-    Dataset<String> mapped = grouped.map(
-      new MapGroupFunction<Integer, String, String>() {
+    Dataset<String> mapped = grouped.mapGroups(
+      new MapGroupsFunction<Integer, String, String>() {
         @Override
         public String call(Integer key, Iterator<String> data) throws Exception {
           StringBuilder sb = new StringBuilder(key.toString());
@@ -409,8 +409,8 @@ public class JavaDatasetSuite implements Serializable {
       .as(Encoders.tuple(Encoders.STRING(), Encoders.INT()));
     Assert.assertEquals(
       Arrays.asList(
-        new Tuple4<>("a", 3, 3L, 2L),
-        new Tuple4<>("b", 3, 3L, 1L)),
+        new Tuple2<>("a", 3),
+        new Tuple2<>("b", 3)),
       agged2.collectAsList());
   }
 

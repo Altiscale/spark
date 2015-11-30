@@ -130,7 +130,7 @@ object ScalaReflection extends ScalaReflection {
 
     /** Returns the current path with a field at ordinal extracted. */
     def addToPathOrdinal(ordinal: Int, dataType: DataType): Expression = path
-      .map(p => GetInternalRowField(p, ordinal, dataType))
+      .map(p => GetStructField(p, ordinal))
       .getOrElse(BoundReference(ordinal, dataType, false))
 
     /** Returns the current path or `BoundReference`. */
@@ -670,14 +670,14 @@ trait ScalaReflection {
    * Unlike `schemaFor`, this method won't throw exception for un-supported type, it will return
    * `NullType` silently instead.
    */
-  protected def silentSchemaFor(tpe: `Type`): Schema = try {
+  def silentSchemaFor(tpe: `Type`): Schema = try {
     schemaFor(tpe)
   } catch {
     case _: UnsupportedOperationException => Schema(NullType, nullable = true)
   }
 
   /** Returns the full class name for a type. */
-  protected def getClassNameFromType(tpe: `Type`): String = {
+  def getClassNameFromType(tpe: `Type`): String = {
     tpe.erasure.typeSymbol.asClass.fullName
   }
 

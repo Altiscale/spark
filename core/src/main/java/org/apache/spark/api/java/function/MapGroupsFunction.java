@@ -15,29 +15,14 @@
  * limitations under the License.
  */
 
-package org.apache.spark.executor
+package org.apache.spark.api.java.function;
 
-import org.apache.spark.rpc.{RpcEnv, RpcCallContext, RpcEndpoint}
-import org.apache.spark.util.Utils
-
-/**
- * Driver -> Executor message to trigger a thread dump.
- */
-private[spark] case object TriggerThreadDump
+import java.io.Serializable;
+import java.util.Iterator;
 
 /**
- * [[RpcEndpoint]] that runs inside of executors to enable driver -> executor RPC.
+ * Base interface for a map function used in GroupedDataset's mapGroup function.
  */
-private[spark]
-class ExecutorEndpoint(override val rpcEnv: RpcEnv, executorId: String) extends RpcEndpoint {
-
-  override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
-    case TriggerThreadDump =>
-      context.reply(Utils.getThreadDump())
-  }
-
-}
-
-object ExecutorEndpoint {
-  val EXECUTOR_ENDPOINT_NAME = "ExecutorEndpoint"
+public interface MapGroupsFunction<K, V, R> extends Serializable {
+  R call(K key, Iterator<V> values) throws Exception;
 }
