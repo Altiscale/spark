@@ -15,14 +15,18 @@
  * limitations under the License.
  */
 
-package org.apache.spark.api.java.function;
+package org.apache.spark.sql.hive
 
-import java.io.Serializable;
-import java.util.Iterator;
+import org.apache.spark.sql.hive.test.TestHiveSingleton
+import org.apache.spark.sql.QueryTest
 
-/**
- * A function that returns zero or more output records from each grouping key and its values.
- */
-public interface FlatMapGroupFunction<K, V, R> extends Serializable {
-  Iterable<R> call(K key, Iterator<V> values) throws Exception;
+class HiveDataFrameSuite extends QueryTest with TestHiveSingleton {
+  test("table name with schema") {
+    // regression test for SPARK-11778
+    hiveContext.sql("create schema usrdb")
+    hiveContext.sql("create table usrdb.test(c int)")
+    hiveContext.read.table("usrdb.test")
+    hiveContext.sql("drop table usrdb.test")
+    hiveContext.sql("drop schema usrdb")
+  }
 }

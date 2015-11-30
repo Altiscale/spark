@@ -21,8 +21,8 @@ import java.io.Serializable;
 import java.util.Iterator;
 
 /**
- * Base interface for a map function used in GroupedDataset's map function.
+ * A function that returns zero or more output records from each grouping key and its values.
  */
-public interface MapGroupFunction<K, V, R> extends Serializable {
-  R call(K key, Iterator<V> values) throws Exception;
+public interface FlatMapGroupsFunction<K, V, R> extends Serializable {
+  Iterable<R> call(K key, Iterator<V> values) throws Exception;
 }
