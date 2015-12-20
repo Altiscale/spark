@@ -496,7 +496,7 @@ private[sql] class JDBCRDD(
       }
       try {
         if (null != conn) {
-          if (!conn.getAutoCommit && !conn.isClosed) {
+          if (!conn.isClosed && !conn.getAutoCommit) {
             try {
               conn.commit()
             } catch {
@@ -509,6 +509,7 @@ private[sql] class JDBCRDD(
       } catch {
         case e: Exception => logWarning("Exception closing connection", e)
       }
+      closed = true
     }
 
     override def hasNext: Boolean = {
