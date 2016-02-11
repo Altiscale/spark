@@ -52,4 +52,10 @@ fi
 # SPARK_YARN_DIST_FILES=/user/spark/opt/hadoop/share/hadoop/hdfs/hadoop-hdfs-2.4.1.jar,/user/spark/opt/hadoop/share/hadoop/yarn/hadoop-yarn-client-2.4.1.jar,/user/spark/opt/hadoop/share/hadoop/yarn/hadoop-yarn-common-2.4.1.jar,/user/spark/opt/hadoop/share/hadoop/yarn/hadoop-yarn-api-2.4.1.jar,/user/spark/opt/hadoop/share/hadoop/yarn/hadoop-yarn-server-web-proxy-2.4.1.jar,/user/spark/opt/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-client-app-2.4.1.jar,/user/spark/opt/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-client-jobclient-2.4.1.jar,/user/spark/opt/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-client-core-2.4.1.jar
 # - SPARK_YARN_DIST_ARCHIVES, Comma separated list of archives to be distributed with the job.
 # See docs/hadoop-provided.md
-export SPARK_DIST_CLASSPATH=$(hadoop classpath)
+HIVE_JAR_COMMA_LIST=""
+for f in `find /opt/hive/lib/ -type f -name "*.jar"`
+do
+  HIVE_JAR_COMMA_LIST=$(basename $f):$HIVE_JAR_COMMA_LIST
+done
+
+export SPARK_DIST_CLASSPATH=$(hadoop classpath):$HIVE_JAR_COMMA_LIST
