@@ -127,7 +127,7 @@
     <mesos.classifier>shaded-protobuf</mesos.classifier>
     <slf4j.version>1.7.10</slf4j.version>
     <log4j.version>1.2.17</log4j.version>
-    <hadoop.version>2.2.0</hadoop.version>
+    <hadoop.version>2.7.1</hadoop.version>
     <protobuf.version>2.5.0</protobuf.version>
     <yarn.version>${hadoop.version}</yarn.version>
     <hbase.version>0.98.7-hadoop2</hbase.version>
@@ -152,7 +152,7 @@
     <codahale.metrics.version>3.1.2</codahale.metrics.version>
     <avro.version>1.7.7</avro.version>
     <avro.mapred.classifier>hadoop2</avro.mapred.classifier>
-    <jets3t.version>0.7.1</jets3t.version>
+    <jets3t.version>0.9.3</jets3t.version>
     <aws.kinesis.client.version>1.4.0</aws.kinesis.client.version>
     <!-- the producer is used in tests -->
     <aws.kinesis.producer.version>0.10.1</aws.kinesis.producer.version>
@@ -2483,7 +2483,10 @@
     <profile>
       <id>hadoop-2.4</id>
       <properties>
-        <hadoop.version>2.4.0</hadoop.version>
+        <hadoop.version>2.4.1</hadoop.version>
+        <yarn.version>2.4.1</yarn.version>
+        <hive.version>1.2.1.spark</hive.version>
+        <hive.version.short>1.2.1</hive.version.short>
         <jets3t.version>0.9.3</jets3t.version>
       </properties>
     </profile>
@@ -2492,6 +2495,22 @@
       <id>hadoop-2.6</id>
       <properties>
         <hadoop.version>2.6.0</hadoop.version>
+        <yarn.version>2.6.0</yarn.version>
+        <hive.version>1.2.1.spark</hive.version>
+        <hive.version.short>1.2.1</hive.version.short>
+        <jets3t.version>0.9.3</jets3t.version>
+        <zookeeper.version>3.4.6</zookeeper.version>
+        <curator.version>2.6.0</curator.version>
+      </properties>
+    </profile>
+
+    <profile>
+      <id>hadoop-2.7</id>
+      <properties>
+        <hadoop.version>2.7.1</hadoop.version>
+        <yarn.version>2.7.1</yarn.version>
+        <hive.version>1.2.1.spark</hive.version>
+        <hive.version.short>1.2.1</hive.version.short>
         <jets3t.version>0.9.3</jets3t.version>
         <zookeeper.version>3.4.6</zookeeper.version>
         <curator.version>2.6.0</curator.version>

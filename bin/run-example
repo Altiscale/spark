@@ -39,12 +39,12 @@ fi
 if [ -f "${SPARK_HOME}/RELEASE" ]; then
   JAR_PATH="${SPARK_HOME}/lib"
 else
-  JAR_PATH="${EXAMPLES_DIR}/target/scala-${SPARK_SCALA_VERSION}"
+  JAR_PATH="${EXAMPLES_DIR}/target/"
 fi
 
 JAR_COUNT=0
 
-for f in "${JAR_PATH}"/spark-examples-*hadoop*.jar; do
+for f in "${JAR_PATH}"/spark-examples_${SPARK_SCALA_VERSION}-${SPARK_VERSION}.jar; do
   if [[ ! -e "$f" ]]; then
     echo "Failed to find Spark examples assembly in ${SPARK_HOME}/lib or ${SPARK_HOME}/examples/target" 1>&2
     echo "You need to build Spark before running this program" 1>&2
@@ -56,7 +56,7 @@ done
 
 if [ "$JAR_COUNT" -gt "1" ]; then
   echo "Found multiple Spark examples assembly jars in ${JAR_PATH}" 1>&2
-  ls "${JAR_PATH}"/spark-examples-*hadoop*.jar 1>&2
+  ls "${JAR_PATH}"/spark-examples-*.jar 1>&2
   echo "Please remove all but one jar." 1>&2
   exit 1
 fi
