@@ -30,10 +30,7 @@ YARN_CONF_DIR=/etc/hadoop/
 HADOOP_SNAPPY_JAR=$(find $HADOOP_HOME/share/hadoop/common/lib/ -type f -name "snappy-java-*.jar")
 HADOOP_LZO_JAR=$(find $HADOOP_HOME/share/hadoop/common/lib/ -type f -name "hadoop-lzo-*.jar")
 
-export JAVA_LIBRARY_PATH=$JAVA_LIBRARY_PATH:$HADOOP_HOME/lib/native
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HADOOP_HOME/lib/native
-export SPARK_LIBRARY_PATH=$SPARK_LIBRARY_PATH:$HADOOP_HOME/lib/native
-export MYSQL_JDBC_DRIVER=/opt/mysql-connector/mysql-connector.jar
 export HIVE_TEZ_JARS=""
 if [ -f /etc/tez/tez-site.xml ] ; then
   HIVE_TEZ_JARS=$(find /opt/tez/ -type f -name "*.jar" | tr -s "\n" ":" | sed 's/:$//')
