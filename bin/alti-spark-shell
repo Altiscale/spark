@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+#
+# A demo wrapper shell script for starting the Spark Shell REPL with HiveContext libraries
+
+if [ -z "${SPARK_HOME}" ]; then
+  export SPARK_HOME="$(cd "`dirname "$0"`"/..; pwd)"
+fi
+if [ -z "${HIVE_HOME}" ]; then
+  export HIVE_HOME='/opt/hive'
+fi
+if [ -z "${SPARK_VERSION}" ]; then
+  export SPARK_VERSION="1.6.1"
+fi
+
+spark_version=$SPARK_VERSION
+
+pushd $SPARK_HOME
+
+sparksql_hivejars="$SPARK_HOME/sql/hive/target/spark-hive_2.10-${spark_version}.jar"
+sparksql_hivethriftjars="$SPARK_HOME/sql/hive-thriftserver/target/spark-hive-thriftserver_2.10-${spark_version}.jar"
+hive_jars=$sparksql_hivejars,$sparksql_hivethriftjars,$(find $HIVE_HOME/lib/ -type f -name "*.jar" | tr -s '\n' ',')
+hive_jars_colon=$sparksql_hivejars:$sparksql_hivethriftjars:$(find $HIVE_HOME/lib/ -type f -name "*.jar" | tr -s '\n' ':')
+
+spark_event_log_dir=$(grep 'spark.eventLog.dir' /etc/spark/spark-defaults.conf | tr -s ' ' '\t' | cut -f2)
+
+./bin/spark-shell --verbose --master yarn --deploy-mode client --queue research --driver-memory 512M --conf spark.eventLog.dir=${spark_event_log_dir}/$USER --conf spark.yarn.dist.files=/etc/spark/hive-site.xml,$hive_jars --conf spark.executor.extraClassPath=$(basename $sparksql_hivejars):$(basename $sparksql_hivethriftjars) --driver-java-options "-XX:MaxPermSize=1024M -Djava.library.path=/opt/hadoop/lib/native/" --driver-class-path hive-site.xml:$hive_jars_colon --executor-memory 1G --executor-cores 2
+
+ret_code=$?
+
+popd
+
+exit $ret_code
