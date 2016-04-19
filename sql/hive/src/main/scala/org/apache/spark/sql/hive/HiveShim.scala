@@ -27,8 +27,9 @@ import scala.collection.JavaConversions._
 import scala.language.implicitConversions
 import scala.reflect.ClassTag
 
-import com.esotericsoftware.kryo.Kryo
-import com.esotericsoftware.kryo.io.{Input, Output}
+import org.apache.hive.com.esotericsoftware.kryo.Kryo
+import org.apache.hive.com.esotericsoftware.kryo.io.{Input, Output}
+import com.google.common.base.Objects
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
