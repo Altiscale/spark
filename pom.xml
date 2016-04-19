@@ -135,7 +135,7 @@
     <curator.version>2.6.0</curator.version>
     <hive.group>org.spark-project.hive</hive.group>
     <!-- Version used in Maven Hive dependency -->
-    <hive.version>1.2.1.spark</hive.version>
+    <hive.version>1.2.1.spark2</hive.version>
     <!-- Version used for internal directory structure -->
     <hive.version.short>1.2.1</hive.version.short>
     <derby.version>10.10.1.1</derby.version>
@@ -2360,7 +2360,7 @@
       <properties>
         <hadoop.version>2.4.1</hadoop.version>
         <yarn.version>2.4.1</yarn.version>
-        <hive.version>1.2.1.spark</hive.version>
+        <hive.version>1.2.1.spark2</hive.version>
         <hive.version.short>1.2.1</hive.version.short>
         <jets3t.version>0.9.3</jets3t.version>
       </properties>
@@ -2371,7 +2371,7 @@
       <properties>
         <hadoop.version>2.6.0</hadoop.version>
         <yarn.version>2.6.0</yarn.version>
-        <hive.version>1.2.1.spark</hive.version>
+        <hive.version>1.2.1.spark2</hive.version>
         <hive.version.short>1.2.1</hive.version.short>
         <jets3t.version>0.9.3</jets3t.version>
         <zookeeper.version>3.4.6</zookeeper.version>
@@ -2384,7 +2384,7 @@
       <properties>
         <hadoop.version>2.7.1</hadoop.version>
         <yarn.version>2.7.1</yarn.version>
-        <hive.version>1.2.1.spark</hive.version>
+        <hive.version>1.2.1.spark2</hive.version>
         <hive.version.short>1.2.1</hive.version.short>
         <jets3t.version>0.9.3</jets3t.version>
         <zookeeper.version>3.4.6</zookeeper.version>
