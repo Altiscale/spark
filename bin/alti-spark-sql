@@ -23,19 +23,17 @@
 if [ -z "${SPARK_HOME}" ]; then
   export SPARK_HOME="$(cd "`dirname "$0"`"/..; pwd)"
 fi
-if [ -z "${HIVE_HOME}" ]; then
-  export HIVE_HOME='/opt/hive'
-fi
-if [ -z "${SPARK_VERSION}" ]; then
-  export SPARK_VERSION="1.6.1"
-fi
 
-spark_version=$SPARK_VERSION
+. "${SPARK_HOME}"/bin/load-spark-env.sh
+
+export HIVE_HOME=i$HIVE_HOME:-"/opt/hive"}
+export SPARK_VERSION=${SPARK_VERSION:-"2.0.0"}
+export SPARK_SCALA_VERSION=${SPARK_SCALA_VERSION:-"2.11"}
 
 pushd $SPARK_HOME
 
-sparksql_hivejars="$SPARK_HOME/sql/hive/target/spark-hive_2.10-${spark_version}.jar"
-sparksql_hivethriftjars="$SPARK_HOME/sql/hive-thriftserver/target/spark-hive-thriftserver_2.10-${spark_version}.jar"
+sparksql_hivejars="$SPARK_HOME/sql/hive/target/spark-hive_${SPARK_SCALA_VERSION}-${SPARK_VERSION}.jar"
+sparksql_hivethriftjars="$SPARK_HOME/sql/hive-thriftserver/target/spark-hive-thriftserver_${SPARK_SCALA_VERSION}-${SPARK_VERSION}.jar"
 hive_jars=$sparksql_hivejars,$sparksql_hivethriftjars,$(find $HIVE_HOME/lib/ -type f -name "*.jar" | tr -s '\n' ',')
 hive_jars_colon=$sparksql_hivejars:$sparksql_hivethriftjars:$(find $HIVE_HOME/lib/ -type f -name "*.jar" | tr -s '\n' ':')
 
