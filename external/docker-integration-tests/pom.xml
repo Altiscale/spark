@@ -148,10 +148,15 @@
      because currently the maven repository does not contain the ojdbc jar mentioned.
      Once the jar is available in maven, this could be uncommented. -->
     <dependency>
-      <groupId>com.oracle</groupId>
+      <groupId>com.oracle.jdbc</groupId>
       <artifactId>ojdbc6</artifactId>
-      <version>11.2.0.1.0</version>
-      <scope>test</scope>
+      <version>11.2.0.4</version>
+      <exclusions>
+        <exclusion>
+          <groupId>*</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <!-- Jersey dependencies, used to override version.
