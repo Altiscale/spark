@@ -33,7 +33,7 @@ import org.apache.hadoop.hive.ql.processors._
 import org.apache.hadoop.hive.ql.session.SessionState
 import org.apache.hadoop.hive.ql.{Driver, metadata}
 import org.apache.hadoop.hive.shims.{HadoopShims, ShimLoader}
-import org.apache.hadoop.security.UserGroupInformation
+import org.apache.hadoop.security.{Credentials, UserGroupInformation}
 import org.apache.hadoop.util.VersionInfo
 
 import org.apache.spark.{SparkConf, SparkException, Logging}
@@ -149,6 +149,10 @@ private[hive] class ClientWrapper(
   // Create an internal session state for this ClientWrapper.
   val state = {
     val original = Thread.currentThread().getContextClassLoader
+    // Add by sookim - start
+    val credentials = UserGroupInformation.getCurrentUser().getCredentials()
+    // Add by sookim - end
+
     // Switch to the initClassLoader.
     Thread.currentThread().setContextClassLoader(initClassLoader)
 
@@ -204,6 +208,9 @@ private[hive] class ClientWrapper(
         SessionState.start(state)
         state.out = new PrintStream(outputBuffer, true, "UTF-8")
         state.err = new PrintStream(outputBuffer, true, "UTF-8")
+        // Add by sookim - start
+        UserGroupInformation.getCurrentUser().addCredentials(credentials)
+        // Add by sookim - end
         state
       }
     } finally {
