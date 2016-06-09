@@ -1,0 +1,320 @@
+#!/bin/bash
+
+#
+# Starts sparktsd
+#
+# chkconfig: 345 93 7
+# description: starts the spark thriftserver, which provides a thrift interface for sparksql
+#
+### BEGIN INIT INFO
+# Provides:          sparktsd
+# Required-Start:    
+# Should-Start:
+# Required-Stop:     
+# Should-Stop:
+# Default-Start:     3 4 5
+# Default-Stop:      0 1 2 6
+# Short-Description: Spark Thrift Server2
+# Description: The spark thrfit server provides a thrift interface that allows other programs to submit sql queries to spark catalyst sql engine.
+### END INIT INFO
+
+# Load default values from Chef
+[ -f /etc/sysconfig/sparktsd ] && . /etc/sysconfig/sparktsd
+# NOT RECOMMENDED. Manually override values after sourcing /etc/sysconfig/sparktsd if necessary
+
+# Inherit values defined via /etc/sysconfig/sparktsd provided by Chef
+export SPARKTS_DAEMON_NAME=${SPARKTS_DAEMON_NAME:-"sparktsd"}
+export SPARKTS_DEFAULT_CONFIG=${SPARKTS_DEFAULT_CONFIG:-"/etc/sparkts"}
+export SPARKTS_DEFAULT_USER=${SPARKTS_DEFAULT_USER:-"sparkts"}
+export SPARKTS_DEFAULT_NOUSER=${SPARKTS_DEFAULT_NOUSER:-"SPARKTS_USER_NOT_CONFIGURED"}
+export SPARKTS_DEFAULT_LOGDIR=${SPARKTS_DEFAULT_LOGDIR:-"/service/log"}
+export SPARKTS_DEFAULT_RUNDIR=${SPARKTS_DEFAULT_RUNDIR:-"/var/run"}
+export SPARKTS_DEFAULT_MAINCLASS=${SPARKTS_DEFAULT_MAINCLASS:-"org.apache.spark.sql.hive.thriftserver.HiveThriftServer2"}
+export SPARKTS_DEFAULT_PORT=${SPARKTS_DEFAULT_PORT:-"28150"}
+# If you need to override SPARK_CONF_DIR, do it here. /etc/sysconfig/sparktsd
+# is managed by Chef, and will be reverted if you manually modify /etc/sysconfig/sparktsd
+export SPARK_CONF_DIR=$SPARKTS_DEFAULT_CONFIG
+
+RETVAL=0
+SERVICE=$SPARKTS_DAEMON_NAME
+DESC="Spark Thrift Server"
+
+
+# If sparktsd is urgently required, set STSUSER (the hive server user)
+# to the name of the user that should be running the hive server and then
+# run: sudo service sparktsd start
+#
+# To stop sparktsd, run: sudo service sparktsd stop
+# To keep sparktsd disabled, set STSUSER to the value of NOUSER above.
+#
+# Note: STSUSER must be in the spark group.
+#
+# Since this file is written by chef, it's important to file a support 
+# request with Altiscale to modify the configuration of this host so that
+# the change to STSUSER is permanent.  Otherwise, the change may be overwritten
+# the next time configuration management runs on this host.  When filing a
+# support request to change STSUSER, please advise Altiscale whether or not
+# you prefer for this service to be monitored.
+STSUSER=$SPARKTS_DEFAULT_USER
+NOUSER=$SPARKTS_DEFAULT_NOUSER
+
+SPARKTS_LOG_DIR="$SPARKTS_DEFAULT_LOGDIR/$STSUSER"
+SPARKTS_PID_DIR="$SPARKTS_DEFAULT_RUNDIR/$STSUSER"
+SPARKTS_CLASS="$SPARKTS_DEFAULT_MAINCLASS"
+SPARKTS_LISTEN_PORT=$SPARKTS_DEFAULT_PORT
+
+PIDFILE="${SPARKTS_PID_DIR}/${SERVICE}.pid"
+LOCKFILE="${SPARKTS_PID_DIR}/${SERVICE}.lock"
+USERFILE="${SPARKTS_PID_DIR}/${SERVICE}.user"
+
+start() {
+    checkstatus &>/dev/null
+
+    if [[ $RETVAL -eq 0 ]]; then
+        echo "$DESC already running"
+        RETVAL=0
+        return $RETVAL
+    fi
+
+    if [[ -e $LOCKFILE ]]; then
+        if [[ $RETVAL -ge 3 ]]; then
+            echo "$DESC: ignoring $LOCKFILE because process no longer exists"
+            rm -f $LOCKFILE
+            rm -f $PIDFILE
+        else
+            echo "$DESC cannot start, another process has the lock. rm ${LOCKFILE} to override"
+            RETVAL=1
+            return $RETVAL
+        fi
+    fi
+
+    echo -n "Starting $DESC: "
+
+    echo "$STSUSER" > $USERFILE
+    
+    # Most clusters will not run the hive server, so this clause is the common case.
+    if [ "$STSUSER" == "$NOUSER" ] ; then
+        echo "success: $DESC is not configured"
+        RETVAL=0
+        return $RETVAL
+    fi
+
+    if ( ! grep -q "^${STSUSER}:" /etc/passwd ) ; then
+        echo "failure: $DESC user $STSUSER does not exist"
+        RETVAL=5
+        return $RETVAL
+    fi
+
+    # These directory and file modifications are provided in this script because they are
+    # fast and they allow the STSUSER to be changed locally.  See the note above about filing
+    # a support ticket with Altiscale when changing STSUSER. Chef also provision these rsources
+    # as well in a standard deployment.
+    /bin/mkdir -p "$SPARKTS_PID_DIR"
+    /bin/chown -R "$STSUSER":spark "$SPARKTS_PID_DIR"
+    /bin/chmod 755 "$SPARKTS_PID_DIR"
+    /bin/mkdir -p "$SPARKTS_LOG_DIR"
+    /bin/chmod 755 "$SPARKTS_LOG_DIR"
+    /bin/chown -R "$STSUSER":spark "$SPARKTS_LOG_DIR"
+
+    # Note: STSUSER must be in the spark group!
+    /bin/chmod g+r "$SPARK_CONF_DIR/hive-site.xml"
+    /bin/chmod g+r "$SPARK_CONF_DIR/log4j.properties"
+
+    # Set up the required Java and Hadoop environment variables
+    . /etc/profile.d/jdk.sh
+    . /etc/profile.d/hadoop-env.sh
+    . /etc/profile.d/spark.sh
+    . $SPARK_CONF_DIR/spark-env.sh
+    
+    touch $LOCKFILE
+
+    # Do we really want to respawn? OR the monitor should detect it, and kick off a restart manually here?
+    # See SI-678 for more detail and tracking on this discussion.
+    # We do not specify any resource allocation parameters here, see AE-1971. We will leverage default values
+    # specified in SPARK_CONF_DIR
+    sparksql_hivejars="$SPARK_HOME/sql/hive/target/spark-hive_2.10-${SPARK_VERSION}.jar"
+    sparksql_hivethriftjars="$SPARK_HOME/sql/hive-thriftserver/target/spark-hive-thriftserver_2.10-${SPARK_VERSION}.jar"
+    hive_jars=$sparksql_hivejars,$sparksql_hivethriftjars,$(find $HIVE_HOME/lib/ -type f -name "*.jar" | tr -s '\n' ',')
+    hive_jars_colon=$sparksql_hivejars:$sparksql_hivethriftjars:$(find $HIVE_HOME/lib/ -type f -name "*.jar" | tr -s '\n' ':')
+    spark_event_log_dir=$(grep 'spark.eventLog.dir' ${SPARK_CONF_DIR}/spark-defaults.conf | tr -s ' ' '\t' | cut -f2)
+    # hdfs dfs -mkdir $spark_event_log_dir/$SPARKTS_DEFAULT_USER
+
+    /usr/local/bin/daemon -u "${STSUSER}" -i -c -F "${PIDFILE}" -o "${SPARKTS_LOG_DIR}/${SERVICE}.log" -- \
+      $SPARK_HOME/bin/spark-submit \
+      --master yarn-client \
+      --executor-memory 1G --num-executors 4 --executor-cores 2 --driver-memory 1G \
+      --driver-class-path hive-site.xml:$hive_jars_colon \
+      --conf spark.yarn.dist.files=/etc/spark/hive-site.xml,$hive_jars \
+      --conf spark.executor.extraClassPath=$(basename $sparksql_hivejars):$(basename $sparksql_hivethriftjars) \
+      --class $SPARKTS_CLASS \
+      --hiveconf hive.server2.thrift.port=$SPARKTS_LISTEN_PORT \
+      --hiveconf hive.server2.thrift.bind.host=$(hostname)
+    RETVAL=$?
+
+    sleep 1
+
+    if [ $RETVAL -ne 0 ]; then
+        echo 'failure'
+        if [[ -e $PIDFILE ]]; then
+            kill $(cat $PIDFILE)
+        fi
+
+        rm -f $PIDFILE $LOCKFILE
+        return $RETVAL
+    fi
+
+    checkstatus
+
+    RETVAL=$?
+
+    if [[ $RETVAL -eq 0 ]]; then
+        echo 'success'
+    else
+        echo 'failure'
+        rm -f $PIDFILE $LOCKFILE
+    fi
+
+    return $RETVAL
+}
+
+stop() {
+    checkstatus &>/dev/null
+
+    if [[ $RETVAL -ne 0 ]]; then
+        echo "$DESC already stopped"
+        rm -f $PIDFILE $LOCKFILE
+        RETVAL=0
+        return $RETVAL
+    fi
+
+    PID=$(cat $PIDFILE)
+    parent_cmd=$(ps --pid ${PID} --no-headers -o%c)
+    child_pids=$(ps --ppid ${PID} --no-headers -o%p)
+
+    echo -n "Stopping $DESC: pid [$PID] command [$parent_cmd] ... "
+
+    kill $PID
+    RETVAL=$?
+
+    # wait for clean shutdown, including closing the port
+    # without this sleep, restart may fail
+    sleep 5
+
+    # make sure any subprocess is dead
+    # NOTE: there should be only one, but if there are more, kill them all
+    if [[ -n $child_pids ]] ; then
+        for p in $child_pids ; do
+            echo "Stopping $DESC subproc [$p] ..."
+            kill -9 $p
+        done
+    fi
+
+    if [ $RETVAL -eq 0 ]; then
+        echo 'success'
+        rm -f $PIDFILE $LOCKFILE
+        return $RETVAL
+    fi
+
+    # Most clusters will not run the hive server, so this clause is the common case.
+    # This code is run after the process shutdown, in case sparktsd was running
+    # for some reason.
+    if [ "$STSUSER" == "$NOUSER" ] ; then
+        echo "success: $DESC is not configured"
+        RETVAL=0
+        return $RETVAL
+    fi
+
+    echo 'failure'
+    return $RETVAL
+}
+
+status() {
+    checkstatus
+
+    if [[ $RETVAL -eq 0 ]] ; then
+        if [ "$STSUSER" == "$NOUSER" ] ; then
+            # indicate a failure because sparktsd should not be running
+            echo "even though $DESC is not configured"
+            RETVAL=1
+            return $RETVAL
+        else
+            return $RETVAL
+        fi
+    fi
+
+    if [[ "$STSUSER" == "$NOUSER" ]] ; then
+        # indicate success because sparktsd is not supposed to be running
+        echo "and $DESC is not configured"
+        RETVAL=0
+        return $RETVAL
+    fi
+
+    return $RETVAL
+}
+
+restart() {
+  stop
+  start
+}
+
+checkstatus(){
+  if [[ ! -e $PIDFILE ]] ; then
+    echo "$DESC is not running (no pid file)"
+    RETVAL=1
+    return $RETVAL
+  fi
+
+  PID=$(cat $PIDFILE)
+
+  if [[ -z $PID ]] ; then
+     echo "$DESC is not running (no pid in $PIDFILE )"
+     RETVAL=2
+     return $RETVAL
+  fi
+
+  parent_cmd=$(ps --pid ${PID} --no-headers -o%c)
+  child_pids=$(ps --ppid ${PID} --no-headers -o%p)
+
+  if [[ -z $parent_cmd ]] ; then
+    echo "$DESC is not running (pid $PID not found)"
+    RETVAL=3
+    return $RETVAL
+  fi
+
+  if [[ "$parent_cmd" != "daemon" ]] ; then
+    echo "$DESC is not running (pid $PID not running daemon)"
+    RETVAL=4
+    return $RETVAL
+  fi
+
+  if [[ -z $child_pids ]] ; then
+    echo "$DESC child proc is not running"
+    RETVAL=4
+    return $RETVAL
+  fi
+
+  echo "$DESC (pid $PID and child-pid $child_pids) are running"
+  RETVAL=0
+  return $RETVAL
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    status)
+        status
+        ;;
+    restart)
+        restart
+        ;;
+	*)
+    	echo "Usage: $0 {start|stop|status|restart}"
+    	exit 1
+esac
+
+exit $RETVAL
+
