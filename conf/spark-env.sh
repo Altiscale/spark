@@ -8,12 +8,11 @@ JAVA_HOME=/usr/java/default
 
 # This file is sourced when running various Spark programs.
 # Copy it as spark-env.sh and edit it to configure Spark for your site.
-if [ "x${SPARK_VERSION}" = "x" ] ; then
-  SPARK_VERSION="1.6.1"
-fi
-if [ "x${SPARK_HOME}" = "x" ] ; then
-  SPARK_HOME="/opt/spark"
-fi
+# We honor bin/load-spark-env.sh values, and any external assignment from
+# users.
+export SPARK_VERSION=${SPARK_VERSION:-"1.6.1"}
+export SPARK_HOME=${SPARK_HOME:-"/opt/spark"}
+export SPARK_SCALA_VERSION=${SPARK_SCALA_VERSION:-"2.10"}
 
 # - SPARK_CLASSPATH, default classpath entries to append
 # Altiscale local libs and folders
@@ -49,11 +48,10 @@ fi
 # - SPARK_YARN_APP_NAME, The name of your application (Default: Spark)
 # - SPARK_YARN_QUEUE, The hadoop queue to use for allocation requests (Default: ‘default’)
 # - SPARK_YARN_DIST_FILES, Comma separated list of files to be distributed with the job.
-# SPARK_YARN_DIST_FILES=/user/spark/opt/hadoop/share/hadoop/hdfs/hadoop-hdfs-2.4.1.jar,/user/spark/opt/hadoop/share/hadoop/yarn/hadoop-yarn-client-2.4.1.jar,/user/spark/opt/hadoop/share/hadoop/yarn/hadoop-yarn-common-2.4.1.jar,/user/spark/opt/hadoop/share/hadoop/yarn/hadoop-yarn-api-2.4.1.jar,/user/spark/opt/hadoop/share/hadoop/yarn/hadoop-yarn-server-web-proxy-2.4.1.jar,/user/spark/opt/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-client-app-2.4.1.jar,/user/spark/opt/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-client-jobclient-2.4.1.jar,/user/spark/opt/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-client-core-2.4.1.jar
 # - SPARK_YARN_DIST_ARCHIVES, Comma separated list of archives to be distributed with the job.
 # See docs/hadoop-provided.md
-SPARK_HIVE_JAR=$(basename $SPARK_HOME/sql/hive/target/spark-hive_2.10-${SPARK_VERSION}.jar)
-SPARK_HIVETHRIFT_JAR=$(basename $SPARK_HOME/sql/hive-thriftserver/target/spark-hive-thriftserver_2.10-${SPARK_VERSION}.jar)
+SPARK_HIVE_JAR=$(basename $SPARK_HOME/sql/hive/target/spark-hive_${SPARK_SCALA_VERSION}-${SPARK_VERSION}.jar)
+SPARK_HIVETHRIFT_JAR=$(basename $SPARK_HOME/sql/hive-thriftserver/target/spark-hive-thriftserver_${SPARK_SCALA_VERSION}-${SPARK_VERSION}.jar)
 HIVE_JAR_COMMA_LIST="$SPARK_HIVE_JAR:$SPARK_HIVETHRIFT_JAR"
 for f in `find /opt/hive/lib/ -type f -name "*.jar"`
 do
