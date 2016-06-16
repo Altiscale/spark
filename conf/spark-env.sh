@@ -11,7 +11,8 @@ JAVA_HOME=/usr/java/default
 # We honor bin/load-spark-env.sh values, and any external assignment from
 # users.
 export SPARK_VERSION=${SPARK_VERSION:-"1.6.1"}
-export SPARK_HOME=${SPARK_HOME:-"/opt/spark"}
+# Use absolute path here, do NOT apply /opt/spark here since we need to support multiple version of Spark
+export SPARK_HOME=${SPARK_HOME:-"/opt/alti-spark-$SPARK_VERSION"}
 export SPARK_SCALA_VERSION=${SPARK_SCALA_VERSION:-"2.10"}
 
 # - SPARK_CLASSPATH, default classpath entries to append
