@@ -22,7 +22,7 @@
   <parent>
     <groupId>org.apache.spark</groupId>
     <artifactId>spark-parent_2.11</artifactId>
-    <version>2.0.0-preview</version>
+    <version>2.0.0</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
 
@@ -89,6 +89,12 @@
     <dependency>
       <groupId>net.sf.jpam</groupId>
       <artifactId>jpam</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-servlet</artifactId>
+      <version>${jetty.version}</version>
+      <scope>provided</scope>
     </dependency>
   </dependencies>
   <build>
