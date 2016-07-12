@@ -4,7 +4,7 @@
 # WARNING: STANDALONE and MESOS are NOT supported in your Infrastructure #
 ##########################################################################
 
-JAVA_HOME=/usr/java/default
+JAVA_HOME=${JAVA_HOME:-"/usr/java/default"}
 
 # This file is sourced when running various Spark programs.
 # Copy it as spark-env.sh and edit it to configure Spark for your site.
@@ -21,11 +21,11 @@ export SPARK_SCALA_VERSION=${SPARK_SCALA_VERSION:-"2.10"}
 # - SPARK_LOCAL_DIRS, storage directories to use on this node for shuffle and RDD data
 
 # Options read in YARN client mode
-HADOOP_HOME=/opt/hadoop/
-HIVE_HOME=/opt/hive/
+HADOOP_HOME=${HADOOP_HOME:-"/opt/hadoop/"}
+HIVE_HOME=${HIVE_HOME:-"/opt/hive/"}
 # - HADOOP_CONF_DIR, to point Spark towards Hadoop configuration files
-HADOOP_CONF_DIR=/etc/hadoop/
-YARN_CONF_DIR=/etc/hadoop/
+HADOOP_CONF_DIR=${HADOOP_CONF_DIR:-"/etc/hadoop/"}
+YARN_CONF_DIR=${YARN_CONF_DIR:-"/etc/hadoop/"}
 
 HADOOP_SNAPPY_JAR=$(find $HADOOP_HOME/share/hadoop/common/lib/ -type f -name "snappy-java-*.jar")
 HADOOP_LZO_JAR=$(find $HADOOP_HOME/share/hadoop/common/lib/ -type f -name "hadoop-lzo-*.jar")
@@ -51,10 +51,16 @@ fi
 # - SPARK_YARN_DIST_FILES, Comma separated list of files to be distributed with the job.
 # - SPARK_YARN_DIST_ARCHIVES, Comma separated list of archives to be distributed with the job.
 # See docs/hadoop-provided.md
-SPARK_HIVE_JAR=$SPARK_HOME/sql/hive/target/spark-hive_${SPARK_SCALA_VERSION}-${SPARK_VERSION}.jar
-SPARK_HIVETHRIFT_JAR=$SPARK_HOME/sql/hive-thriftserver/target/spark-hive-thriftserver_${SPARK_SCALA_VERSION}-${SPARK_VERSION}.jar
+SPARK_HIVE_JAR=$SPARK_HOME/lib/spark-hive_${SPARK_SCALA_VERSION}.jar
+SPARK_HIVETHRIFT_JAR=$SPARK_HOME/lib/spark-hive-thriftserver_${SPARK_SCALA_VERSION}.jar
+# TODO: After updating our document or move to 1.6.2+, we can remove the deprecated values
+# Old version introduce filename that embed version string, newer version will no longer contain
+# version string in JAR filenames to reduce to friction of upgrade.
+DEPRECATE_SPARK_HIVE_JAR=$SPARK_HOME/sql/hive/target/spark-hive_${SPARK_SCALA_VERSION}-${SPARK_VERSION}.jar
+DEPRECATE_SPARK_HIVETHRIFT_JAR=$SPARK_HOME/sql/hive-thriftserver/target/spark-hive-thriftserver_${SPARK_SCALA_VERSION}-${SPARK_VERSION}.jar
+
 HIVE_JAR_COMMA_LIST="$SPARK_HIVE_JAR:$SPARK_HIVETHRIFT_JAR"
-for f in `find /opt/hive/lib/ -type f -name "*.jar"`
+for f in `find ${HIVE_HOME}/lib/ -type f -name "*.jar"`
 do
   HIVE_JAR_COMMA_LIST=$f:$HIVE_JAR_COMMA_LIST
 done
@@ -65,5 +71,6 @@ for f in `find /opt/hive/lib/ -type f -name "*.jar"`
 do
   DEPRECATE_HIVE_JAR_COMMA_LIST=$(basename $f):$DEPRECATE_HIVE_JAR_COMMA_LIST
 done
+DEPRECATE_HIVE_JAR_COMMA_LIST=$(basename $DEPRECATE_SPARK_HIVE_JAR):$(basename $DEPRECATE_SPARK_HIVETHRIFT_JAR):$DEPRECATE_HIVE_JAR_COMMA_LIST
 
 export SPARK_DIST_CLASSPATH=$(hadoop classpath):$HIVE_JAR_COMMA_LIST:$DEPRECATE_HIVE_JAR_COMMA_LIST

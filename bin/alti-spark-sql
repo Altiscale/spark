@@ -30,16 +30,28 @@ export HIVE_HOME=${HIVE_HOME:-"/opt/hive"}
 export SPARK_VERSION=${SPARK_VERSION:-"1.6.1"}
 export SPARK_SCALA_VERSION=${SPARK_SCALA_VERSION:-"2.10"}
 
+spark_conf=${SPARK_CONF_DIR:-"/etc/alti-spark-$SPARK_VERSION"}
+
 pushd $SPARK_HOME
 
 sparksql_hivejars="$SPARK_HOME/sql/hive/target/spark-hive_${SPARK_SCALA_VERSION}-${SPARK_VERSION}.jar"
 sparksql_hivethriftjars="$SPARK_HOME/sql/hive-thriftserver/target/spark-hive-thriftserver_${SPARK_SCALA_VERSION}-${SPARK_VERSION}.jar"
 hive_jars=$sparksql_hivejars,$sparksql_hivethriftjars,$(find $HIVE_HOME/lib/ -type f -name "*.jar" | tr -s '\n' ',')
-hive_jars_colon=$sparksql_hivejars:$sparksql_hivethriftjars:$(find $HIVE_HOME/lib/ -type f -name "*.jar" | tr -s '\n' ':')
 
 spark_event_log_dir=$(grep 'spark.eventLog.dir' /etc/spark/spark-defaults.conf | tr -s ' ' '\t' | cut -f2)
 
-./bin/spark-sql --verbose --master yarn --deploy-mode client --queue research --driver-memory 512M --conf spark.eventLog.dir=${spark_event_log_dir}/$USER --conf spark.yarn.dist.files=/etc/spark/hive-site.xml,$hive_jars --conf spark.executor.extraClassPath=$(basename $sparksql_hivejars):$(basename $sparksql_hivethriftjars) --driver-java-options "-XX:MaxPermSize=1024M -Djava.library.path=/opt/hadoop/lib/native/" --driver-class-path hive-site.xml:$hive_jars_colon --executor-memory 1G --executor-cores 2
+./bin/spark-sql \
+  --master yarn --deploy-mode client \
+  --queue research \
+  --driver-memory 512M \
+  --executor-memory 1G \
+  --executor-cores 2 \
+  --jars $spark_conf/hive-site.xml,$hive_jars \
+  --driver-class-path $spark_conf/hive-site.xml:$spark_conf/yarnclient-driver-log4j.properties \
+  --conf spark.yarn.am.extraJavaOptions="-Djava.library.path=$HADOOP_HOME/lib/native/" \
+  --conf spark.executor.extraClassPath=$(basename $sparksql_hivejars):$(basename $sparksql_hivethriftjars) \
+  --conf spark.driver.extraJavaOptions="-Dlog4j.configuration=yarnclient-driver-log4j.properties -Djava.library.path=$HADOOP_HOME/lib/native/" \
+  --conf spark.eventLog.dir=${spark_event_log_dir}/$USER
 
 ret_code=$?
 
