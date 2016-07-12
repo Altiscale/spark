@@ -4,7 +4,7 @@
 # WARNING: STANDALONE and MESOS are NOT supported in your Infrastructure #
 ##########################################################################
 
-JAVA_HOME=/usr/java/default
+JAVA_HOME=${JAVA_HOME:-"/usr/java/default"}
 
 # This file is sourced when running various Spark programs.
 # Copy it as spark-env.sh and edit it to configure Spark for your site.
@@ -21,11 +21,11 @@ export SPARK_SCALA_VERSION=${SPARK_SCALA_VERSION:-"2.10"}
 # - SPARK_LOCAL_DIRS, storage directories to use on this node for shuffle and RDD data
 
 # Options read in YARN client mode
-HADOOP_HOME=/opt/hadoop/
-HIVE_HOME=/opt/hive/
+HADOOP_HOME=${HADOOP_HOME:-"/opt/hadoop/"}
+HIVE_HOME=${HIVE_HOME:-"/opt/hive/"}
 # - HADOOP_CONF_DIR, to point Spark towards Hadoop configuration files
-HADOOP_CONF_DIR=/etc/hadoop/
-YARN_CONF_DIR=/etc/hadoop/
+HADOOP_CONF_DIR=${HADOOP_CONF_DIR:-"/etc/hadoop/"}
+YARN_CONF_DIR=${YARN_CONF_DIR:-"/etc/hadoop/"}
 
 HADOOP_SNAPPY_JAR=$(find $HADOOP_HOME/share/hadoop/common/lib/ -type f -name "snappy-java-*.jar")
 HADOOP_LZO_JAR=$(find $HADOOP_HOME/share/hadoop/common/lib/ -type f -name "hadoop-lzo-*.jar")
@@ -54,7 +54,7 @@ fi
 SPARK_HIVE_JAR=$SPARK_HOME/sql/hive/target/spark-hive_${SPARK_SCALA_VERSION}-${SPARK_VERSION}.jar
 SPARK_HIVETHRIFT_JAR=$SPARK_HOME/sql/hive-thriftserver/target/spark-hive-thriftserver_${SPARK_SCALA_VERSION}-${SPARK_VERSION}.jar
 HIVE_JAR_COMMA_LIST="$SPARK_HIVE_JAR:$SPARK_HIVETHRIFT_JAR"
-for f in `find /opt/hive/lib/ -type f -name "*.jar"`
+for f in `find ${HIVE_HOME}/lib/ -type f -name "*.jar"`
 do
   HIVE_JAR_COMMA_LIST=$f:$HIVE_JAR_COMMA_LIST
 done

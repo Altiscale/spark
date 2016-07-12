@@ -148,12 +148,12 @@ start() {
     /usr/local/bin/daemon -u "${STSUSER}" -i -c -F "${PIDFILE}" -o "${SPARKTS_LOG_DIR}/${SERVICE}.log" -- \
       $SPARK_HOME/bin/spark-submit \
       --master yarn-client \
+      --jars $SPARK_CONF_DIR/hive-site.xml,$hive_jars \
       --driver-memory $SPARKTS_DEFAULT_DRIVER_MEMORY \
       --executor-memory $SPARKTS_DEFAULT_EXECUTOR_MEMORY \
       --executor-cores $SPARKTS_DEFAULT_EXECUTOR_CORE \
-      --driver-class-path hive-site.xml:$hive_jars_colon \
-      --conf spark.yarn.dist.files=/etc/spark/hive-site.xml,$hive_jars \
-      --conf spark.executor.extraClassPath=$(basename $sparksql_hivejars):$(basename $sparksql_hivethriftjars) \
+      --conf spark.yarn.am.extraJavaOptions="-Djava.library.path=$HADOOP_HOME/lib/native/" \
+      --conf spark.driver.extraJavaOptions="-Dlog4j.configuration=yarnclient-driver-log4j.properties -Djava.library.path=$HADOOP_HOME/lib/native/" \
       --class $SPARKTS_CLASS \
       --hiveconf hive.server2.thrift.port=$SPARKTS_LISTEN_PORT \
       --hiveconf hive.server2.thrift.bind.host=$(hostname)
