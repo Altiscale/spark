@@ -51,12 +51,19 @@ fi
 # - SPARK_YARN_DIST_FILES, Comma separated list of files to be distributed with the job.
 # - SPARK_YARN_DIST_ARCHIVES, Comma separated list of archives to be distributed with the job.
 # See docs/hadoop-provided.md
-SPARK_HIVE_JAR=$(basename $SPARK_HOME/sql/hive/target/spark-hive_${SPARK_SCALA_VERSION}-${SPARK_VERSION}.jar)
-SPARK_HIVETHRIFT_JAR=$(basename $SPARK_HOME/sql/hive-thriftserver/target/spark-hive-thriftserver_${SPARK_SCALA_VERSION}-${SPARK_VERSION}.jar)
+SPARK_HIVE_JAR=$SPARK_HOME/sql/hive/target/spark-hive_${SPARK_SCALA_VERSION}-${SPARK_VERSION}.jar
+SPARK_HIVETHRIFT_JAR=$SPARK_HOME/sql/hive-thriftserver/target/spark-hive-thriftserver_${SPARK_SCALA_VERSION}-${SPARK_VERSION}.jar
 HIVE_JAR_COMMA_LIST="$SPARK_HIVE_JAR:$SPARK_HIVETHRIFT_JAR"
 for f in `find /opt/hive/lib/ -type f -name "*.jar"`
 do
-  HIVE_JAR_COMMA_LIST=$(basename $f):$HIVE_JAR_COMMA_LIST
+  HIVE_JAR_COMMA_LIST=$f:$HIVE_JAR_COMMA_LIST
 done
 
-export SPARK_DIST_CLASSPATH=$(hadoop classpath):$HIVE_JAR_COMMA_LIST
+# Applying this for backward compatibility
+DEPRECATE_HIVE_JAR_COMMA_LIST="$(basename $SPARK_HIVE_JAR):$(basename $SPARK_HIVETHRIFT_JAR)"
+for f in `find /opt/hive/lib/ -type f -name "*.jar"`
+do
+  DEPRECATE_HIVE_JAR_COMMA_LIST=$(basename $f):$DEPRECATE_HIVE_JAR_COMMA_LIST
+done
+
+export SPARK_DIST_CLASSPATH=$(hadoop classpath):$HIVE_JAR_COMMA_LIST:$DEPRECATE_HIVE_JAR_COMMA_LIST
