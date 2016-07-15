@@ -27,14 +27,14 @@ HIVE_HOME=${HIVE_HOME:-"/opt/hive/"}
 HADOOP_CONF_DIR=${HADOOP_CONF_DIR:-"/etc/hadoop/"}
 YARN_CONF_DIR=${YARN_CONF_DIR:-"/etc/hadoop/"}
 
-HADOOP_SNAPPY_JAR=$(find $HADOOP_HOME/share/hadoop/common/lib/ -type f -name "snappy-java-*.jar")
-HADOOP_LZO_JAR=$(find $HADOOP_HOME/share/hadoop/common/lib/ -type f -name "hadoop-lzo-*.jar")
-
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HADOOP_HOME/lib/native
-export HIVE_TEZ_JARS=""
-if [ -f /etc/tez/tez-site.xml ] ; then
-  HIVE_TEZ_JARS=$(find /opt/tez/ -type f -name "*.jar" | tr -s "\n" ":" | sed 's/:$//')
-fi
+# TODO: Uncomment this if you are setting Tez as default engine for Hive
+# and add them to the default SPARK_DIST_CLASSPATH. You will need to point
+# to the Tez JARs on deployed via HDFS
+# export HIVE_TEZ_JARS=""
+# if [ -f /etc/tez/tez-site.xml ] ; then
+#   HIVE_TEZ_JARS=$(find /opt/tez/ -type f -name "*.jar" | tr -s "\n" ":" | sed 's/:$//')
+# fi
 
 # OBSOLETE
 # DO NOT USE SPARK_CLASSPATH anymore since it conflict in yarn-client mode with --driver-class-path
@@ -53,17 +53,17 @@ fi
 # See docs/hadoop-provided.md
 SPARK_HIVE_JAR=$SPARK_HOME/sql/hive/target/spark-hive_${SPARK_SCALA_VERSION}-${SPARK_VERSION}.jar
 SPARK_HIVETHRIFT_JAR=$SPARK_HOME/sql/hive-thriftserver/target/spark-hive-thriftserver_${SPARK_SCALA_VERSION}-${SPARK_VERSION}.jar
-HIVE_JAR_COMMA_LIST="$SPARK_HIVE_JAR:$SPARK_HIVETHRIFT_JAR"
-for f in `find ${HIVE_HOME}/lib/ -type f -name "*.jar"`
-do
-  HIVE_JAR_COMMA_LIST=$f:$HIVE_JAR_COMMA_LIST
-done
+# HIVE_JAR_COMMA_LIST="$SPARK_HIVE_JAR:$SPARK_HIVETHRIFT_JAR"
+# for f in `find ${HIVE_HOME}/lib/ -type f -name "*.jar"`
+# do
+#   HIVE_JAR_COMMA_LIST=$f:$HIVE_JAR_COMMA_LIST
+# done
 
 # Applying this for backward compatibility
-DEPRECATE_HIVE_JAR_COMMA_LIST="$(basename $SPARK_HIVE_JAR):$(basename $SPARK_HIVETHRIFT_JAR)"
-for f in `find /opt/hive/lib/ -type f -name "*.jar"`
-do
-  DEPRECATE_HIVE_JAR_COMMA_LIST=$(basename $f):$DEPRECATE_HIVE_JAR_COMMA_LIST
-done
+# DEPRECATE_HIVE_JAR_COMMA_LIST="$(basename $SPARK_HIVE_JAR):$(basename $SPARK_HIVETHRIFT_JAR)"
+# for f in `find /opt/hive/lib/ -type f -name "*.jar"`
+# do
+#   DEPRECATE_HIVE_JAR_COMMA_LIST=./hive/$(basename $f):$DEPRECATE_HIVE_JAR_COMMA_LIST
+# done
 
-export SPARK_DIST_CLASSPATH=$(hadoop classpath):$HIVE_JAR_COMMA_LIST:$DEPRECATE_HIVE_JAR_COMMA_LIST
+export SPARK_DIST_CLASSPATH=$(hadoop classpath):$SPARK_HIVE_JAR:$SPARK_HIVETHRIFT_JAR:$(basename $SPARK_HIVE_JAR):$(basename $SPARK_HIVETHRIFT_JAR):${HIVE_HOME}/lib/*:./hive/*
