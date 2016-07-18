@@ -37,7 +37,6 @@ pushd $SPARK_HOME
 
 sparksql_hivejars="$SPARK_HOME/sql/hive/target/spark-hive_${SPARK_SCALA_VERSION}-${SPARK_VERSION}.jar"
 sparksql_hivethriftjars="$SPARK_HOME/sql/hive-thriftserver/target/spark-hive-thriftserver_${SPARK_SCALA_VERSION}-${SPARK_VERSION}.jar"
-hive_jars=$sparksql_hivejars,$sparksql_hivethriftjars,$(find $HIVE_HOME/lib/ -type f -name "*.jar" | tr -s '\n' ',')
 
 spark_event_log_dir=$(grep 'spark.eventLog.dir' $spark_conf/spark-defaults.conf | tr -s ' ' '\t' | cut -f2)
 
@@ -47,8 +46,9 @@ spark_event_log_dir=$(grep 'spark.eventLog.dir' $spark_conf/spark-defaults.conf 
   --driver-memory 512M \
   --executor-memory 1G \
   --executor-cores 2 \
-  --jars $spark_conf/hive-site.xml,$hive_jars \
-  --driver-class-path $spark_conf/hive-site.xml:$spark_conf/yarnclient-driver-log4j.properties \
+  --jars $spark_conf/hive-site.xml,$sparksql_hivejars \
+  --driver-class-path $spark_conf/hive-site.xml:$spark_conf/yarnclient-driver-log4j.properties $queue_name \
+  --archives hdfs:///user/$USER/apps/$(basename $(readlink -f $HIVE_HOME))-lib.zip#hive \
   --conf spark.yarn.am.extraJavaOptions="-Djava.library.path=$HADOOP_HOME/lib/native/" \
   --conf spark.executor.extraClassPath=$(basename $sparksql_hivejars):$(basename $sparksql_hivethriftjars) \
   --conf spark.driver.extraJavaOptions="-Dlog4j.configuration=yarnclient-driver-log4j.properties -Djava.library.path=$HADOOP_HOME/lib/native/" \
