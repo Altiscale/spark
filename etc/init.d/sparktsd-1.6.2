@@ -19,12 +19,12 @@
 ### END INIT INFO
 
 # Load default values from Chef
-[ -f /etc/sysconfig/sparktsd ] && . /etc/sysconfig/sparktsd
+[ -f /etc/sysconfig/sparktsd-1.6.2 ] && . /etc/sysconfig/sparktsd-1.6.2
 # NOT RECOMMENDED. Manually override values after sourcing /etc/sysconfig/sparktsd if necessary
 
 # Inherit values defined via /etc/sysconfig/sparktsd provided by Chef
-export SPARKTS_DAEMON_NAME=${SPARKTS_DAEMON_NAME:-"sparktsd"}
-export SPARKTS_DEFAULT_CONFIG=${SPARKTS_DEFAULT_CONFIG:-"/etc/sparkts"}
+export SPARKTS_DAEMON_NAME=${SPARKTS_DAEMON_NAME:-"sparktsd-1.6.2"}
+export SPARKTS_DEFAULT_CONFIG=${SPARKTS_DEFAULT_CONFIG:-"/etc/sparkts-1.6.2"}
 export SPARKTS_DEFAULT_USER=${SPARKTS_DEFAULT_USER:-"sparkts"}
 export SPARKTS_DEFAULT_NOUSER=${SPARKTS_DEFAULT_NOUSER:-"SPARKTS_USER_NOT_CONFIGURED"}
 export SPARKTS_DEFAULT_LOGDIR=${SPARKTS_DEFAULT_LOGDIR:-"/service/log"}
@@ -121,14 +121,13 @@ start() {
     /bin/chmod 755 "$SPARKTS_LOG_DIR"
     /bin/chown -R "$STSUSER":spark "$SPARKTS_LOG_DIR"
 
-    # Note: STSUSER must be in the spark group!
+    # Note: STSUSER must be in the sparkts and hiveusers group!
     /bin/chmod g+r "$SPARK_CONF_DIR/hive-site.xml"
     /bin/chmod g+r "$SPARK_CONF_DIR/log4j.properties"
 
     # Set up the required Java and Hadoop environment variables
     . /etc/profile.d/jdk.sh
     . /etc/profile.d/hadoop-env.sh
-    . /etc/profile.d/spark.sh
     . $SPARK_CONF_DIR/spark-env.sh
     
     touch $LOCKFILE
@@ -139,8 +138,6 @@ start() {
     # specified in SPARK_CONF_DIR
     sparksql_hivejars="$SPARK_HOME/sql/hive/target/spark-hive_2.10-${SPARK_VERSION}.jar"
     sparksql_hivethriftjars="$SPARK_HOME/sql/hive-thriftserver/target/spark-hive-thriftserver_2.10-${SPARK_VERSION}.jar"
-    hive_jars=$sparksql_hivejars,$sparksql_hivethriftjars,$(find $HIVE_HOME/lib/ -type f -name "*.jar" | tr -s '\n' ',')
-    hive_jars_colon=$sparksql_hivejars:$sparksql_hivethriftjars:$(find $HIVE_HOME/lib/ -type f -name "*.jar" | tr -s '\n' ':')
     spark_event_log_dir=$(grep 'spark.eventLog.dir' ${SPARK_CONF_DIR}/spark-defaults.conf | tr -s ' ' '\t' | cut -f2)
     # hdfs dfs -mkdir $spark_event_log_dir/$SPARKTS_DEFAULT_USER
 
@@ -148,10 +145,13 @@ start() {
     /usr/local/bin/daemon -u "${STSUSER}" -i -c -F "${PIDFILE}" -o "${SPARKTS_LOG_DIR}/${SERVICE}.log" -- \
       $SPARK_HOME/bin/spark-submit \
       --master yarn-client \
-      --jars $SPARK_CONF_DIR/hive-site.xml,$hive_jars \
+      --driver-class-path $SPARK_CONF_DIR/hive-site.xml:$SPARK_CONF_DIR/yarnclient-driver-log4j.properties \
       --driver-memory $SPARKTS_DEFAULT_DRIVER_MEMORY \
       --executor-memory $SPARKTS_DEFAULT_EXECUTOR_MEMORY \
       --executor-cores $SPARKTS_DEFAULT_EXECUTOR_CORE \
+      --jars $SPARK_CONF_DIR/hive-site.xml,$sparksql_hivejars,$sparksql_hivethriftjars \
+      --archives hdfs:///user/$STSUSER/apps/$(basename $(readlink -f $HIVE_HOME))-lib.zip#hive \
+      --conf spark.executor.extraClassPath=$(basename $sparksql_hivejars):$(basename $sparksql_hivethriftjars) \
       --conf spark.yarn.am.extraJavaOptions="-Djava.library.path=$HADOOP_HOME/lib/native/" \
       --conf spark.driver.extraJavaOptions="-Dlog4j.configuration=yarnclient-driver-log4j.properties -Djava.library.path=$HADOOP_HOME/lib/native/" \
       --class $SPARKTS_CLASS \

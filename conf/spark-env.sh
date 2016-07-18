@@ -53,17 +53,17 @@ fi
 # See docs/hadoop-provided.md
 SPARK_HIVE_JAR=$SPARK_HOME/sql/hive/target/spark-hive_${SPARK_SCALA_VERSION}-${SPARK_VERSION}.jar
 SPARK_HIVETHRIFT_JAR=$SPARK_HOME/sql/hive-thriftserver/target/spark-hive-thriftserver_${SPARK_SCALA_VERSION}-${SPARK_VERSION}.jar
-HIVE_JAR_COMMA_LIST="$SPARK_HIVE_JAR:$SPARK_HIVETHRIFT_JAR"
-for f in `find ${HIVE_HOME}/lib/ -type f -name "*.jar"`
-do
-  HIVE_JAR_COMMA_LIST=$f:$HIVE_JAR_COMMA_LIST
-done
+# HIVE_JAR_COMMA_LIST="$SPARK_HIVE_JAR:$SPARK_HIVETHRIFT_JAR"
+# for f in `find ${HIVE_HOME}/lib/ -type f -name "*.jar"`
+# do
+#   HIVE_JAR_COMMA_LIST=$f:$HIVE_JAR_COMMA_LIST
+# done
 
 # Applying this for backward compatibility
-DEPRECATE_HIVE_JAR_COMMA_LIST="$(basename $SPARK_HIVE_JAR):$(basename $SPARK_HIVETHRIFT_JAR)"
-for f in `find /opt/hive/lib/ -type f -name "*.jar"`
-do
-  DEPRECATE_HIVE_JAR_COMMA_LIST=$(basename $f):$DEPRECATE_HIVE_JAR_COMMA_LIST
-done
+# DEPRECATE_HIVE_JAR_COMMA_LIST="$(basename $SPARK_HIVE_JAR):$(basename $SPARK_HIVETHRIFT_JAR)"
+# for f in `find /opt/hive/lib/ -type f -name "*.jar"`
+# do
+#   DEPRECATE_HIVE_JAR_COMMA_LIST=./hive/$(basename $f):$DEPRECATE_HIVE_JAR_COMMA_LIST
+# done
 
-export SPARK_DIST_CLASSPATH=$(hadoop classpath):$HIVE_JAR_COMMA_LIST:$DEPRECATE_HIVE_JAR_COMMA_LIST
+export SPARK_DIST_CLASSPATH=$(hadoop classpath):$SPARK_HIVE_JAR:$SPARK_HIVETHRIFT_JAR:$(basename $SPARK_HIVE_JAR):$(basename $SPARK_HIVETHRIFT_JAR):${HIVE_HOME}/lib/*:./hive/*
