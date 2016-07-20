@@ -156,6 +156,7 @@ start() {
       --conf spark.driver.extraJavaOptions="-Dlog4j.configuration=yarnclient-driver-log4j.properties -Djava.library.path=$HADOOP_HOME/lib/native/" \
       --class $SPARKTS_CLASS \
       --hiveconf hive.server2.thrift.port=$SPARKTS_LISTEN_PORT \
+      --hiveconf hive.server2.kerberos.custom.authentication.port=$SPARKTS_HIVE_CUSTOM_AUTH_PORT \
       --hiveconf hive.server2.thrift.bind.host=$(hostname)
     RETVAL=$?
 

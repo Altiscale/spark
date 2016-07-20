@@ -51,8 +51,8 @@ fi
 # - SPARK_YARN_DIST_FILES, Comma separated list of files to be distributed with the job.
 # - SPARK_YARN_DIST_ARCHIVES, Comma separated list of archives to be distributed with the job.
 # See docs/hadoop-provided.md
-SPARK_HIVE_JAR=$SPARK_HOME/sql/hive/target/spark-hive_${SPARK_SCALA_VERSION}-${SPARK_VERSION}.jar
-SPARK_HIVETHRIFT_JAR=$SPARK_HOME/sql/hive-thriftserver/target/spark-hive-thriftserver_${SPARK_SCALA_VERSION}-${SPARK_VERSION}.jar
+SPARK_HIVE_JAR=$SPARK_HOME/lib/spark-hive_${SPARK_SCALA_VERSION}.jar
+SPARK_HIVETHRIFT_JAR=$SPARK_HOME/lib/spark-hive-thriftserver_${SPARK_SCALA_VERSION}.jar
 # HIVE_JAR_COMMA_LIST="$SPARK_HIVE_JAR:$SPARK_HIVETHRIFT_JAR"
 # for f in `find ${HIVE_HOME}/lib/ -type f -name "*.jar"`
 # do
