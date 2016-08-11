@@ -35,9 +35,9 @@ else
 fi
 
 # Find assembly jar
-SPARK_ASSEMBLY_JAR=
-if [ -f "$SPARK_HOME/RELEASE" ]; then
-  ASSEMBLY_DIR="$SPARK_HOME/lib"
+SPARK_ASSEMBLY_JAR="${SPARK_HOME}/lib/spark-assembly-${SPARK_VERSION}.jar"
+if [ -f "${SPARK_HOME}/RELEASE" ]; then
+  ASSEMBLY_DIR="${SPARK_HOME}/lib"
 else
   ASSEMBLY_DIR="$SPARK_HOME/assembly/target/scala-$SPARK_SCALA_VERSION"
 fi
@@ -57,7 +57,7 @@ if [ "$num_jars" -gt "1" ]; then
   exit 1
 fi
 
-SPARK_ASSEMBLY_JAR="${ASSEMBLY_DIR}/${ASSEMBLY_JARS}"
+SPARK_ASSEMBLY_JAR=${SPARK_ASSEMBLY_JAR:-"$ASSEMBLY_DIR/$ASSEMBLY_JARS"}
 
 LAUNCH_CLASSPATH="$SPARK_ASSEMBLY_JAR"
 
