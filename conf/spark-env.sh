@@ -5,6 +5,7 @@
 ##########################################################################
 
 JAVA_HOME=${JAVA_HOME:-"/usr/java/default"}
+[ -f /etc/profile.d/hadoop-env.sh ] && . /etc/profile.d/hadoop-env.sh
 
 # This file is sourced when running various Spark programs.
 # Copy it as spark-env.sh and edit it to configure Spark for your site.
