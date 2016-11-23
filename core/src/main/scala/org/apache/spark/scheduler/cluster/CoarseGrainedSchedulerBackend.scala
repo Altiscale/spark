@@ -273,7 +273,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           // manager to reregister itself. If that happens, the block manager master will know
           // about the executor, but the scheduler will not. Therefore, we should remove the
           // executor from the block manager when we hit this case.
-          scheduler.sc.env.blockManager.master.removeExecutor(executorId)
+          scheduler.sc.env.blockManager.master.removeExecutorAsync(executorId)
           logInfo(s"Asked to remove non-existent executor $executorId")
       }
     }
@@ -364,14 +364,15 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     conf.getInt("spark.default.parallelism", math.max(totalCoreCount.get(), 2))
   }
 
-  // Called by subclasses when notified of a lost worker
-  def removeExecutor(executorId: String, reason: ExecutorLossReason) {
-    try {
-      driverEndpoint.askWithRetry[Boolean](RemoveExecutor(executorId, reason))
-    } catch {
-      case e: Exception =>
-        throw new SparkException("Error notifying standalone scheduler's driver endpoint", e)
-    }
+  /**
+   * Called by subclasses when notified of a lost worker. It just fires the message and returns
+   * at once.
+   */
+  protected def removeExecutor(executorId: String, reason: ExecutorLossReason): Unit = {
+    // Only log the failure since we don't care about the result.
+    driverEndpoint.ask[Boolean](RemoveExecutor(executorId, reason)).onFailure { case t =>
+      logError(t.getMessage, t)
+    }(ThreadUtils.sameThread)
   }
 
   def sufficientResourcesRegistered(): Boolean = true
