@@ -19,12 +19,12 @@
 ### END INIT INFO
 
 # Load default values from Chef
-[ -f /etc/sysconfig/sparktsd-1.6.2 ] && . /etc/sysconfig/sparktsd-1.6.2
+[ -f /etc/sysconfig/sparktsd-1.6.3 ] && . /etc/sysconfig/sparktsd-1.6.3
 # NOT RECOMMENDED. Manually override values after sourcing /etc/sysconfig/sparktsd if necessary
 
 # Inherit values defined via /etc/sysconfig/sparktsd provided by Chef
-export SPARKTS_DAEMON_NAME=${SPARKTS_DAEMON_NAME:-"sparktsd-1.6.2"}
-export SPARKTS_DEFAULT_CONFIG=${SPARKTS_DEFAULT_CONFIG:-"/etc/sparkts-1.6.2"}
+export SPARKTS_DAEMON_NAME=${SPARKTS_DAEMON_NAME:-"sparktsd-1.6.3"}
+export SPARKTS_DEFAULT_CONFIG=${SPARKTS_DEFAULT_CONFIG:-"/etc/sparkts-1.6.3"}
 export SPARKTS_DEFAULT_USER=${SPARKTS_DEFAULT_USER:-"sparkts"}
 export SPARKTS_DEFAULT_NOUSER=${SPARKTS_DEFAULT_NOUSER:-"SPARKTS_USER_NOT_CONFIGURED"}
 export SPARKTS_DEFAULT_LOGDIR=${SPARKTS_DEFAULT_LOGDIR:-"/service/log"}
