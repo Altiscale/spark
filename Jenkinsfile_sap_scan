@@ -1,0 +1,30 @@
+#!/usr/bin/env groovy
+pipeline {
+    agent any
+    environment {
+        SRCCLR_API_TOKEN     = credentials('srcclr_api_token')
+    }
+    stages {
+        stage ('Initialize') {
+            steps {
+                sh '''
+		   java -version
+		   mvn --version
+                '''
+            }
+        }
+
+        stage ('SourceClear') {
+            steps {
+                sh 'mvn -s sap_scan_settings.xml com.srcclr:srcclr-maven-plugin:scan' 
+            }
+        }
+
+	stage('IPScan and PPMS') {
+            steps {
+	        sh 'mvn -s sap_scan_settings.xml whitesource:update -Dorg.whitesource.orgToken="b39d1328-52e2-42e3-98f0-932709daf3f0" -Dorg.whitesource.product="SHC - SAP CP BIG DATA SERVICES OD"'
+	    }
+	}
+
+    }
+}
