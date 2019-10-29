@@ -135,6 +135,17 @@
     <testOutputDirectory>target/scala-${scala.binary.version}/test-classes</testOutputDirectory>
     <plugins>
       <plugin>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.0.2</version>
+        <configuration>
+	  <!-- exclude the following classes that cause conflict with custom authentication in hive-1.2.1 -->
+          <excludes>
+            <exclude>**/auth/*</exclude>
+            <exclude>**/cli/thrift/*</exclude>
+          </excludes>
+        </configuration>
+      </plugin>
+      <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>build-helper-maven-plugin</artifactId>
         <executions>
