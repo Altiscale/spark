@@ -10,7 +10,6 @@ export M2_HOME=/opt/mvn3
 export JAVA_HOME=/opt/java
 
 # AE-1226 temp fix on the R PATH
-zypper -n install R-base-3.5.0
 export R_HOME=/usr
 if [ "x${R_HOME}" = "x" ] ; then
   echo "warn - R_HOME not defined, CRAN R isn't installed properly in the current env"
