@@ -181,7 +181,7 @@ DEBUG_MAVEN=${DEBUG_MAVEN:-"false"}
 if [ "x${DEBUG_MAVEN}" = "xtrue" ] ; then
   mvn_cmd="mvn -U -X $hadoop_profile_str -Phive-thriftserver -Phadoop-provided -Phive-provided -Psparkr -Pyarn -Pkinesis-asl -DskipTests install"
 else
-  mvn_cmd="mvn -U -X -e $hadoop_profile_str -Phive-thriftserver -Phadoop-provided -Phive-provided -Psparkr -Pyarn -Pkinesis-asl -DskipTests install"
+  mvn_cmd="mvn -U $hadoop_profile_str -Phive-thriftserver -Phadoop-provided -Phive-provided -Psparkr -Pyarn -Pkinesis-asl -DskipTests install"
 fi
 
 echo "$mvn_cmd"
