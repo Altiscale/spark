@@ -36,27 +36,6 @@ if [[ $SPARK_VERSION == 2.* ]] ; then
   fi
 fi
 
-# Defines which Hadoop version to build against. Always use the latest as default.
-export ALTISCALE_RELEASE=${ALTISCALE_RELEASE:-"4.3.0"}
-if [[ $HADOOP_VERSION == 2.2.* ]] ; then
-  TARGET_ALTISCALE_RELEASE=2.0.0
-elif [[ $HADOOP_VERSION == 2.4.* ]] ; then
-  TARGET_ALTISCALE_RELEASE=3.0.0
-elif [[ $HADOOP_VERSION == 2.[67].* ]] ; then
-  TARGET_ALTISCALE_RELEASE=4.3.0
-else
-  2>&1 echo "error - can't recognize altiscale's HADOOP_VERSION=$HADOOP_VERSION for $ALTISCALE_RELEASE"
-  2>&1 echo "error - $SPARK_VERSION has not yet been tested nor endorsed by Altiscale on $HADOOP_VERSION"
-  2>&1 echo "error - We won't continue to build Spark $SPARK_VERSION, exiting!"
-  exit -1
-fi
-# Sanity check on RPM label integration and Altiscale release label
-if [ "$TARGET_ALTISCALE_RELEASE" != "$ALTISCALE_RELEASE" ] ; then
-  2>&1 echo "fatal - you specified $ALTISCALE_RELEASE that is not verified by $SPARK_VERSION yet"
-  2>&1 echo "fatal - releasing this will potentially break Spark installaion or Hadoop compatibility, exiting!"
-  exit -2
-fi
-
 export BUILD_TIMEOUT=${BUILD_TIMEOUT:-"86400"}
 # centos6.5-x86_64
 # centos6.6-x86_64
@@ -217,7 +196,7 @@ mkdir --mode=0755 -p ${INSTALL_DIR}
 export RPM_DIR="${INSTALL_DIR}/rpm/"
 mkdir -p --mode 0755 ${RPM_DIR}
 
-echo "Packaging spark yarn shuffle rpm with name ${RPM_NAME} with version ${ALTISCALE_RELEASE}-${DATE_STRING}"
+echo "Packaging spark yarn shuffle rpm with name ${RPM_NAME} with version ${SPARK_VERSION}-${DATE_STRING}"
 
 ##########################
 # Spark YARN SHUFFLE RPM #
@@ -266,7 +245,7 @@ if [ $? -ne 0 ] ; then
   exit -1
 fi
 
-mv "${RPM_DIR}${RPM_YARNSHUFFLE_NAME}-${ALTISCALE_RELEASE}-${DATE_STRING}.noarch.rpm" "${RPM_DIR}${RPM_YARNSHUFFLE_NAME}.rpm"
+mv "${RPM_DIR}${RPM_YARNSHUFFLE_NAME}-${SPARK_VERSION}-${DATE_STRING}.noarch.rpm" "${RPM_DIR}${RPM_YARNSHUFFLE_NAME}.rpm"
 
 echo "ok - spark $RPM_YARNSHUFFLE_NAME and RPM completed successfully!"
 
@@ -377,7 +356,7 @@ if [ $? -ne 0 ] ; then
 fi
 popd
 
-mv "${RPM_DIR}${RPM_NAME}-${ALTISCALE_RELEASE}-${DATE_STRING}.noarch.rpm" "${RPM_DIR}${RPM_NAME}.rpm"
+mv "${RPM_DIR}${RPM_NAME}-${SPARK_VERSION}-${DATE_STRING}.noarch.rpm" "${RPM_DIR}${RPM_NAME}.rpm"
 echo "ok - spark $RPM_NAME and RPM completed successfully!"
 
 ###################
@@ -441,7 +420,7 @@ if [ $? -ne 0 ] ; then
 fi
 popd
 
-mv "${RPM_DIR}${RPM_DEVEL_NAME}-${ALTISCALE_RELEASE}-${DATE_STRING}.noarch.rpm" "${RPM_DIR}${RPM_DEVEL_NAME}.rpm"
+mv "${RPM_DIR}${RPM_DEVEL_NAME}-${SPARK_VERSION}-${DATE_STRING}.noarch.rpm" "${RPM_DIR}${RPM_DEVEL_NAME}.rpm"
 echo "ok - spark $RPM_DEVEL_NAME and RPM completed successfully!"
 
 #####################
@@ -492,7 +471,7 @@ if [ $? -ne 0 ] ; then
 fi
 popd
 
-mv "${RPM_DIR}${RPM_KINESIS_NAME}-${ALTISCALE_RELEASE}-${DATE_STRING}.noarch.rpm" "${RPM_DIR}${RPM_KINESIS_NAME}.rpm"
+mv "${RPM_DIR}${RPM_KINESIS_NAME}-${SPARK_VERSION}-${DATE_STRING}.noarch.rpm" "${RPM_DIR}${RPM_KINESIS_NAME}.rpm"
 echo "ok - spark $RPM_KINESIS_NAME and RPM completed successfully!"
 
 
