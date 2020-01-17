@@ -255,7 +255,7 @@ popd
 ##################
 # Spark Core RPM #
 ##################
-echo "Packaging spark rpm with name ${RPM_NAME} with version ${ALTISCALE_VERSION}-${DATE_STRING}"
+echo "Packaging spark rpm with name ${RPM_NAME} with version ${SPARK_VERSION}-${DATE_STRING}"
 
 export RPM_BUILD_DIR=${INSTALL_DIR}/opt/alti-spark-${SPARK_VERSION}
 # Generate RPM based on where spark artifacts are placed from previous steps
