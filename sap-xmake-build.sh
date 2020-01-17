@@ -249,7 +249,7 @@ fpm --verbose \
 -s dir \
 -t rpm \
 -n ${RPM_YARNSHUFFLE_NAME} \
--v ${ALTISCALE_RELEASE} \
+-v ${SPARK_VERSION}  \
 --iteration ${DATE_STRING} \
 --rpm-user root \
 --rpm-group root \
@@ -359,7 +359,7 @@ fpm --verbose \
 -s dir \
 -t rpm \
 -n ${RPM_NAME} \
--v ${ALTISCALE_RELEASE} \
+-v ${SPARK_VERSION}  \
 --iteration ${DATE_STRING} \
 --rpm-user root \
 --rpm-group root \
@@ -423,7 +423,7 @@ fpm --verbose \
 -s dir \
 -t rpm \
 -n ${RPM_DEVEL_NAME} \
--v ${ALTISCALE_RELEASE} \
+-v ${SPARK_VERSION}  \
 --iteration ${DATE_STRING} \
 --rpm-user root \
 --rpm-group root \
@@ -475,7 +475,7 @@ fpm --verbose \
 -s dir \
 -t rpm \
 -n ${RPM_KINESIS_NAME} \
--v ${ALTISCALE_RELEASE} \
+-v ${SPARK_VERSION} \
 --iteration ${DATE_STRING} \
 --rpm-user root \
 --rpm-group root \
