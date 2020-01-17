@@ -253,6 +253,9 @@ fpm --verbose \
 --iteration ${DATE_STRING} \
 --rpm-user root \
 --rpm-group root \
+--template-value version=$SPARK_VERSION \
+--template-value scala_version=$SCALA_VERSION \
+--template-value pkgname=$RPM_YARNSHUFFLE_NAME \
 --rpm-auto-add-directories \
 -C ${INSTALL_DIR} \
 opt
@@ -360,6 +363,9 @@ fpm --verbose \
 --iteration ${DATE_STRING} \
 --rpm-user root \
 --rpm-group root \
+--template-value version=$SPARK_VERSION \
+--template-value scala_version=$SCALA_VERSION \
+--template-value pkgname=$RPM_NAME \
 --rpm-auto-add-directories \
 -C ${INSTALL_DIR} \
 opt etc
@@ -421,6 +427,9 @@ fpm --verbose \
 --iteration ${DATE_STRING} \
 --rpm-user root \
 --rpm-group root \
+--template-value version=$SPARK_VERSION \
+--template-value scala_version=$SCALA_VERSION \
+--template-value pkgname=$RPM_DEVEL_NAME \
 --rpm-auto-add-directories \
 -C ${INSTALL_DIR} \
 opt
@@ -470,6 +479,9 @@ fpm --verbose \
 --iteration ${DATE_STRING} \
 --rpm-user root \
 --rpm-group root \
+--template-value version=$SPARK_VERSION \
+--template-value scala_version=$SCALA_VERSION \
+--template-value pkgname=$RPM_KINESIS_NAME \
 -C ${INSTALL_DIR} \
 opt
 
