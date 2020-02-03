@@ -3,19 +3,19 @@ artifacts builderVersion: "1.1", {
   group "com.sap.bds.ats-altiscale", {
 
     artifact "spark", {
-      file "$gendir/src/spark_rpmbuild/rpm/alti-spark-${buildVersion}.rpm"
+      file "$gendir/src/spark_rpmbuild/rpm/alti-spark-2.4.4.rpm"
     }
 
     artifact "spark-shuffle", {
-      file "$gendir/src/spark_rpmbuild/rpm/alti-spark-${buildVersion}-yarn-shuffle.rpm"
+      file "$gendir/src/spark_rpmbuild/rpm/alti-spark-2.4.4-yarn-shuffle.rpm"
     }
 
     artifact "spark-devel", {
-      file "$gendir/src/spark_rpmbuild/rpm/alti-spark-${buildVersion}-devel.rpm"
+      file "$gendir/src/spark_rpmbuild/rpm/alti-spark-2.4.4-devel.rpm"
     }
 
     artifact "spark-kinesis", {
-      file "$gendir/src/spark_rpmbuild/rpm/alti-spark-${buildVersion}-kinesis.rpm"
+      file "$gendir/src/spark_rpmbuild/rpm/alti-spark-2.4.4-kinesis.rpm"
     }
   }
 }
