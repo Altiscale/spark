@@ -181,12 +181,8 @@ popd
 # Build RPM
 export RPM_NAME=`echo alti-spark-${SPARK_VERSION}`
 export RPM_DESCRIPTION="Apache Spark ${SPARK_VERSION}\n\n${DESCRIPTION}"
-export RPM_DEVEL_NAME=`echo alti-spark-${SPARK_VERSION}-devel`
-export RPM_DEVEL_DESCRIPTION="Apache Spark ${SPARK_VERSION} individual module and JARs and libraries compiled by maven\n\n${DESCRIPTION}"
 export RPM_YARNSHUFFLE_NAME=`echo alti-spark-${SPARK_VERSION}-yarn-shuffle`
 export RPM_YARNSHUFFLE_DESCRIPTION="The Apache Spark ${SPARK_VERSION} pluggable spark_shuffle RPM to install spark_shuffle JAR compiled by maven\n\n${DESCRIPTION}\nThis package contains the yarn-shuffle JAR to enable spark_shuffle on YARN node managers when it is added to NM classpath."
-export RPM_KINESIS_NAME=`echo alti-spark-${SPARK_VERSION}-kinesis`
-export RPM_KINESIS_DESCRIPTION="This package provides the artifact for kinesis integration for Spark. Aware, this is under Amazon Software License (ASL), see: https://aws.amazon.com/asl/ for more information. \n\n${DESCRIPTION}"
 
 DATE_STRING=`date +%Y%m%d%H%M%S`
 GIT_REPO="https://github.com/Altiscale/spark"
