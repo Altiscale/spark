@@ -26,7 +26,7 @@ export HIVE_VERSION=${HIVE_VERSION:-"2.1.1"}
 export SPARK_PKG_NAME=${SPARK_PKG_NAME:-"spark"}
 export SPARK_GID=${SPARK_GID:-"411460017"}
 export SPARK_UID=${SPARK_UID:-"411460024"}
-export SPARK_VERSION=${SPARK_VERSION:-"2.3.2"}
+export SPARK_VERSION=${SPARK_VERSION:-"2.3.4"}
 export SCALA_VERSION=${SCALA_VERSION:-"2.11"}
 
 if [[ $SPARK_VERSION == 2.* ]] ; then
@@ -46,7 +46,7 @@ export BUILD_TIME=$(date +%Y%m%d%H%M)
 export MAVEN_OPTS=${MAVEN_OPTS:-"-Xmx2048m -XX:MaxPermSize=1024m"}
 export PRODUCTION_RELEASE=${PRODUCTION_RELEASE:-"false"}
 
-export PACKAGE_BRANCH=${PACKAGE_BRANCH:-"branch-2.3.2-alti"}
+export PACKAGE_BRANCH=${PACKAGE_BRANCH:-"branch-2.3.4-alti"}
 DEBUG_MAVEN=${DEBUG_MAVEN:-"false"}
 
 
