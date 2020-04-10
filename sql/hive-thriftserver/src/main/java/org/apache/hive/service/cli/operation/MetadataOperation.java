@@ -18,6 +18,7 @@
 
 package org.apache.hive.service.cli.operation;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.hadoop.hive.conf.HiveConf;

@@ -96,7 +96,7 @@ public final class KerberosSaslHelper {
     private final ThriftCLIService service;
     private final Server saslServer;
 
-    CLIServiceProcessorFactory(Server saslServer, ThriftCLIService service) {
+    public CLIServiceProcessorFactory(Server saslServer, ThriftCLIService service) {
       super(null);
       this.service = service;
       this.saslServer = saslServer;

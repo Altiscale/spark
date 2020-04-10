@@ -29,7 +29,7 @@ public interface Service {
   /**
    * Service states
    */
-  enum STATE {
+  public enum STATE {
     /** Constructed but not initialized */
     NOTINITED,
 
@@ -49,7 +49,7 @@ public interface Service {
    * The transition must be from {@link STATE#NOTINITED} to {@link STATE#INITED} unless the
    * operation failed and an exception was raised.
    *
-   * @param conf
+   * @param config
    *          the configuration of the service
    */
   void init(HiveConf conf);
