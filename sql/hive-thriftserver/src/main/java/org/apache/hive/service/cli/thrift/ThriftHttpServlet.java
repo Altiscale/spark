@@ -21,6 +21,7 @@ package org.apache.hive.service.cli.thrift;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.security.PrivilegedExceptionAction;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
@@ -240,9 +241,9 @@ public class ThriftHttpServlet extends TServlet {
    * Each cookie is of the format [key]=[value]
    */
   private String toCookieStr(Cookie[] cookies) {
-    String cookieStr = "";
+	String cookieStr = "";
 
-    for (Cookie c : cookies) {
+	for (Cookie c : cookies) {
      cookieStr += c.getName() + "=" + c.getValue() + " ;\n";
     }
     return cookieStr;
@@ -457,7 +458,7 @@ public class ThriftHttpServlet extends TServlet {
 
   private String getUsername(HttpServletRequest request, String authType)
       throws HttpAuthenticationException {
-    String[] creds = getAuthHeaderTokens(request, authType);
+    String creds[] = getAuthHeaderTokens(request, authType);
     // Username must be present
     if (creds[0] == null || creds[0].isEmpty()) {
       throw new HttpAuthenticationException("Authorization header received " +
@@ -468,7 +469,7 @@ public class ThriftHttpServlet extends TServlet {
 
   private String getPassword(HttpServletRequest request, String authType)
       throws HttpAuthenticationException {
-    String[] creds = getAuthHeaderTokens(request, authType);
+    String creds[] = getAuthHeaderTokens(request, authType);
     // Password must be present
     if (creds[1] == null || creds[1].isEmpty()) {
       throw new HttpAuthenticationException("Authorization header received " +
@@ -519,7 +520,7 @@ public class ThriftHttpServlet extends TServlet {
     return authHeaderBase64String;
   }
 
-  private boolean isKerberosAuthMode(String authType) {
+  protected boolean isKerberosAuthMode(String authType) {
     return authType.equalsIgnoreCase(HiveAuthFactory.AuthTypes.KERBEROS.toString());
   }
 

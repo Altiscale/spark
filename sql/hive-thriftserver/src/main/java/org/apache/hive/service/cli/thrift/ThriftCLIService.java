@@ -18,13 +18,14 @@
 
 package org.apache.hive.service.cli.thrift;
 
-import javax.security.auth.login.LoginException;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+
+import javax.security.auth.login.LoginException;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -35,7 +36,17 @@ import org.apache.hive.service.ServiceException;
 import org.apache.hive.service.ServiceUtils;
 import org.apache.hive.service.auth.HiveAuthFactory;
 import org.apache.hive.service.auth.TSetIpAddressProcessor;
-import org.apache.hive.service.cli.*;
+import org.apache.hive.service.cli.CLIService;
+import org.apache.hive.service.cli.FetchOrientation;
+import org.apache.hive.service.cli.FetchType;
+import org.apache.hive.service.cli.GetInfoType;
+import org.apache.hive.service.cli.GetInfoValue;
+import org.apache.hive.service.cli.HiveSQLException;
+import org.apache.hive.service.cli.OperationHandle;
+import org.apache.hive.service.cli.OperationStatus;
+import org.apache.hive.service.cli.RowSet;
+import org.apache.hive.service.cli.SessionHandle;
+import org.apache.hive.service.cli.TableSchema;
 import org.apache.hive.service.cli.session.SessionManager;
 import org.apache.hive.service.server.HiveServer2;
 import org.apache.thrift.TException;
@@ -212,7 +223,23 @@ public abstract class ThriftCLIService extends AbstractService implements TCLISe
   public TGetDelegationTokenResp GetDelegationToken(TGetDelegationTokenReq req)
       throws TException {
     TGetDelegationTokenResp resp = new TGetDelegationTokenResp();
-    resp.setStatus(notSupportTokenErrorStatus());
+
+    if (hiveAuthFactory == null) {
+      resp.setStatus(unsecureTokenErrorStatus());
+    } else {
+      try {
+        String token = cliService.getDelegationToken(
+            new SessionHandle(req.getSessionHandle()),
+            hiveAuthFactory, req.getOwner(), req.getRenewer());
+        resp.setDelegationToken(token);
+        resp.setStatus(OK_STATUS);
+      } catch (HiveSQLException e) {
+        LOG.error("Error obtaining delegation token", e);
+        TStatus tokenErrorStatus = HiveSQLException.toTStatus(e);
+        tokenErrorStatus.setSqlState("42000");
+        resp.setStatus(tokenErrorStatus);
+      }
+    }
     return resp;
   }
 
@@ -220,7 +247,19 @@ public abstract class ThriftCLIService extends AbstractService implements TCLISe
   public TCancelDelegationTokenResp CancelDelegationToken(TCancelDelegationTokenReq req)
       throws TException {
     TCancelDelegationTokenResp resp = new TCancelDelegationTokenResp();
-    resp.setStatus(notSupportTokenErrorStatus());
+
+    if (hiveAuthFactory == null) {
+      resp.setStatus(unsecureTokenErrorStatus());
+    } else {
+      try {
+        cliService.cancelDelegationToken(new SessionHandle(req.getSessionHandle()),
+            hiveAuthFactory, req.getDelegationToken());
+        resp.setStatus(OK_STATUS);
+      } catch (HiveSQLException e) {
+        LOG.error("Error canceling delegation token", e);
+        resp.setStatus(HiveSQLException.toTStatus(e));
+      }
+    }
     return resp;
   }
 
@@ -228,13 +267,25 @@ public abstract class ThriftCLIService extends AbstractService implements TCLISe
   public TRenewDelegationTokenResp RenewDelegationToken(TRenewDelegationTokenReq req)
       throws TException {
     TRenewDelegationTokenResp resp = new TRenewDelegationTokenResp();
-    resp.setStatus(notSupportTokenErrorStatus());
+    if (hiveAuthFactory == null) {
+      resp.setStatus(unsecureTokenErrorStatus());
+    } else {
+      try {
+        cliService.renewDelegationToken(new SessionHandle(req.getSessionHandle()),
+            hiveAuthFactory, req.getDelegationToken());
+        resp.setStatus(OK_STATUS);
+      } catch (HiveSQLException e) {
+        LOG.error("Error obtaining renewing token", e);
+        resp.setStatus(HiveSQLException.toTStatus(e));
+      }
+    }
     return resp;
   }
 
-  private TStatus notSupportTokenErrorStatus() {
+  private TStatus unsecureTokenErrorStatus() {
     TStatus errorStatus = new TStatus(TStatusCode.ERROR_STATUS);
-    errorStatus.setErrorMessage("Delegation token is not supported");
+    errorStatus.setErrorMessage("Delegation token only supported over remote " +
+        "client with kerberos authentication");
     return errorStatus;
   }
 
@@ -671,8 +722,8 @@ public abstract class ThriftCLIService extends AbstractService implements TCLISe
     }
 
     // If there's no authentication, then directly substitute the user
-    if (HiveAuthFactory.AuthTypes.NONE.toString()
-        .equalsIgnoreCase(hiveConf.getVar(ConfVars.HIVE_SERVER2_AUTHENTICATION))) {
+    if (HiveAuthFactory.AuthTypes.NONE.toString().
+        equalsIgnoreCase(hiveConf.getVar(ConfVars.HIVE_SERVER2_AUTHENTICATION))) {
       return proxyUser;
     }
 
@@ -682,7 +733,7 @@ public abstract class ThriftCLIService extends AbstractService implements TCLISe
     return proxyUser;
   }
 
-  private boolean isKerberosAuthMode() {
+  protected boolean isKerberosAuthMode() {
     return cliService.getHiveConf().getVar(ConfVars.HIVE_SERVER2_AUTHENTICATION)
         .equalsIgnoreCase(HiveAuthFactory.AuthTypes.KERBEROS.toString());
   }

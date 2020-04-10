@@ -25,6 +25,7 @@ import org.apache.hive.service.cli.operation.OperationManager;
 import org.apache.hive.service.cli.thrift.TProtocolVersion;
 
 import java.io.File;
+import java.util.Map;
 
 /**
  * Methods that don't need to be executed under a doAs
