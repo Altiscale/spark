@@ -124,6 +124,9 @@
           <excludes>
             <exclude>**/auth/*</exclude>
             <exclude>**/cli/*</exclude>
+            <exclude>**/cli/thrift/*</exclude>
+            <exclude>**/cli/session/*</exclude>
+            <exclude>**/cli/operation/*</exclude>
           </excludes>
         </configuration>
       </plugin>
