@@ -27,7 +27,7 @@ export SPARK_PKG_NAME=${SPARK_PKG_NAME:-"spark"}
 export SPARK_GID=${SPARK_GID:-"411460017"}
 export SPARK_UID=${SPARK_UID:-"411460024"}
 export SPARK_VERSION=${SPARK_VERSION:-"2.3.2"}
-export SCALA_VERSION=${SCALA_VERSION:-"2.12"}
+export SCALA_VERSION=${SCALA_VERSION:-"2.11"}
 
 if [[ $SPARK_VERSION == 2.* ]] ; then
   if [[ $SCALA_VERSION != 2.12 ]] ; then
