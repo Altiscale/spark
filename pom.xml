@@ -133,7 +133,7 @@
     <orc.version>1.4.4</orc.version>
     <orc.classifier>nohive</orc.classifier>
     <hive.parquet.version>1.6.0</hive.parquet.version>
-    <jetty.version>9.3.24.v20180605</jetty.version>
+    <jetty.version>9.4.27.v20200227</jetty.version>
     <javaxservlet.version>3.1.0</javaxservlet.version>
     <chill.version>0.8.4</chill.version>
     <ivy.version>2.4.0</ivy.version>
@@ -155,11 +155,11 @@
     <commons.math3.version>3.4.1</commons.math3.version>
     <!-- managed up from 3.2.1 for SPARK-11652 -->
     <commons.collections.version>3.2.2</commons.collections.version>
-    <scala.version>2.11.8</scala.version>
-    <scala.binary.version>2.11</scala.binary.version>
+    <scala.version>2.12.11</scala.version>
+    <scala.binary.version>2.12</scala.binary.version>
     <codehaus.jackson.version>1.9.13</codehaus.jackson.version>
-    <fasterxml.jackson.version>2.6.7</fasterxml.jackson.version>
-    <fasterxml.jackson.databind.version>2.6.7.1</fasterxml.jackson.databind.version>
+    <fasterxml.jackson.version>2.10.3</fasterxml.jackson.version>
+    <fasterxml.jackson.databind.version>2.10.3</fasterxml.jackson.databind.version>
     <snappy.version>1.1.2.6</snappy.version>
     <netlib.java.version>1.1.2</netlib.java.version>
     <calcite.version>1.2.0-incubating</calcite.version>
@@ -2731,7 +2731,7 @@
     <profile>
       <id>scala-2.12</id>
       <properties>
-        <scala.version>2.12.4</scala.version>
+        <scala.version>2.12.11</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
       </properties>
       <build>

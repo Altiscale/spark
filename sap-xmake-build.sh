@@ -27,11 +27,11 @@ export SPARK_PKG_NAME=${SPARK_PKG_NAME:-"spark"}
 export SPARK_GID=${SPARK_GID:-"411460017"}
 export SPARK_UID=${SPARK_UID:-"411460024"}
 export SPARK_VERSION=${SPARK_VERSION:-"2.3.2"}
-export SCALA_VERSION=${SCALA_VERSION:-"2.11"}
+export SCALA_VERSION=${SCALA_VERSION:-"2.12"}
 
 if [[ $SPARK_VERSION == 2.* ]] ; then
-  if [[ $SCALA_VERSION != 2.11 ]] ; then
-    2>&1 echo "error - scala version requires 2.11+ for Spark $SPARK_VERSION, can't continue building, exiting!"
+  if [[ $SCALA_VERSION != 2.12 ]] ; then
+    2>&1 echo "error - scala version requires 2.12 for Spark $SPARK_VERSION, can't continue building, exiting!"
     exit -1
   fi
 fi
@@ -46,7 +46,7 @@ export BUILD_TIME=$(date +%Y%m%d%H%M)
 export MAVEN_OPTS=${MAVEN_OPTS:-"-Xmx2048m -XX:MaxPermSize=1024m"}
 export PRODUCTION_RELEASE=${PRODUCTION_RELEASE:-"false"}
 
-export PACKAGE_BRANCH=${PACKAGE_BRANCH:-"branch-2.3.2-alti"}
+export PACKAGE_BRANCH=${PACKAGE_BRANCH:-"sap-branch-2.3.4-alti-BDSGOLD-750"}
 DEBUG_MAVEN=${DEBUG_MAVEN:-"false"}
 
 
@@ -158,9 +158,9 @@ fi
 
 DEBUG_MAVEN=${DEBUG_MAVEN:-"false"}
 if [ "x${DEBUG_MAVEN}" = "xtrue" ] ; then
-  mvn_cmd="mvn -U -X $hadoop_profile_str -Phive-thriftserver -Phadoop-provided -Phive-provided -Psparkr -Pyarn -Pkinesis-asl -DskipTests install"
+  mvn_cmd="mvn -U -X $hadoop_profile_str -Phive-thriftserver -Phadoop-provided -Phive-provided -Psparkr -Pyarn -Pkinesis-asl -Pscala-${SCALA_VERSION} -DskipTests install"
 else
-  mvn_cmd="mvn -U $hadoop_profile_str -Phive-thriftserver -Phadoop-provided -Phive-provided -Psparkr -Pyarn -Pkinesis-asl -DskipTests install"
+  mvn_cmd="mvn -U $hadoop_profile_str -Phive-thriftserver -Phadoop-provided -Phive-provided -Psparkr -Pyarn -Pkinesis-asl -Pscala-${SCALA_VERSION} -DskipTests install"
 fi
 
 echo "$mvn_cmd"
