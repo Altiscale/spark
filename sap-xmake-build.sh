@@ -30,7 +30,7 @@ export SPARK_VERSION=${SPARK_VERSION:-"2.3.2"}
 export SCALA_VERSION=${SCALA_VERSION:-"2.11"}
 
 if [[ $SPARK_VERSION == 2.* ]] ; then
-  if [[ $SCALA_VERSION != 2.12 ]] ; then
+  if [[ $SCALA_VERSION != 2.11 ]] ; then
     2>&1 echo "error - scala version requires 2.12 for Spark $SPARK_VERSION, can't continue building, exiting!"
     exit -1
   fi
