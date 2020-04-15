@@ -47,7 +47,7 @@ export MAVEN_OPTS=${MAVEN_OPTS:-"-Xmx2048m -XX:MaxPermSize=1024m"}
 export PRODUCTION_RELEASE=${PRODUCTION_RELEASE:-"false"}
 
 export PACKAGE_BRANCH=${PACKAGE_BRANCH:-"sap-branch-2.3.4-alti-BDSGOLD-750"}
-DEBUG_MAVEN=${DEBUG_MAVEN:-"false"}
+DEBUG_MAVEN=${DEBUG_MAVEN:-"true"}
 
 
 
