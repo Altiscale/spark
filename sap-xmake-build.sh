@@ -19,7 +19,7 @@ fi
 
 export PATH=$M2_HOME/bin:$JAVA_HOME/bin:$PATH:$R_HOME
 
-export HADOOP_VERSION=${HADOOP_VERSION:-"2.7.3"}
+export HADOOP_VERSION=${HADOOP_VERSION:-"2.7.7"}
 export HIVE_VERSION=${HIVE_VERSION:-"2.1.1"}
 # Define default spark uid:gid and build version
 # and all other Spark build related env
