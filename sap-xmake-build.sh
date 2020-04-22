@@ -6,7 +6,7 @@ curr_dir=`dirname $0`
 curr_dir=`cd $curr_dir; pwd`
 git_hash=""
 
-export M2_HOME=/opt/mvn3
+export M2_HOME=/opt/mvn3.6.3
 export JAVA_HOME=/opt/java
 
 # AE-1226 temp fix on the R PATH
@@ -19,19 +19,19 @@ fi
 
 export PATH=$M2_HOME/bin:$JAVA_HOME/bin:$PATH:$R_HOME
 
-export HADOOP_VERSION=${HADOOP_VERSION:-"2.7.3"}
-export HIVE_VERSION=${HIVE_VERSION:-"2.1.1"}
+export HADOOP_VERSION=${HADOOP_VERSION:-"2.7.7"}
+export HIVE_VERSION=${HIVE_VERSION:-"2.3.3"}
 # Define default spark uid:gid and build version
 # and all other Spark build related env
 export SPARK_PKG_NAME=${SPARK_PKG_NAME:-"spark"}
 export SPARK_GID=${SPARK_GID:-"411460017"}
 export SPARK_UID=${SPARK_UID:-"411460024"}
-export SPARK_VERSION=${SPARK_VERSION:-"2.3.2"}
-export SCALA_VERSION=${SCALA_VERSION:-"2.11"}
+export SPARK_VERSION=${SPARK_VERSION:-"3.0.0"}
+export SCALA_VERSION=${SCALA_VERSION:-"2.12"}
 
 if [[ $SPARK_VERSION == 2.* ]] ; then
-  if [[ $SCALA_VERSION != 2.11 ]] ; then
-    2>&1 echo "error - scala version requires 2.11+ for Spark $SPARK_VERSION, can't continue building, exiting!"
+  if [[ $SCALA_VERSION != 2.12 ]] ; then
+    2>&1 echo "error - scala version requires 2.12+ for Spark $SPARK_VERSION, can't continue building, exiting!"
     exit -1
   fi
 fi
@@ -43,11 +43,11 @@ export BUILD_TIMEOUT=${BUILD_TIMEOUT:-"86400"}
 export BUILD_ROOT=${BUILD_ROOT:-"centos6.5-x86_64"}
 export BUILD_TIME=$(date +%Y%m%d%H%M)
 # Customize build OPTS for MVN
-export MAVEN_OPTS=${MAVEN_OPTS:-"-Xmx2048m -XX:MaxPermSize=1024m"}
+export MAVEN_OPTS=${MAVEN_OPTS:-"-Xmx8192m -XX:MaxPermSize=4096m"}
 export PRODUCTION_RELEASE=${PRODUCTION_RELEASE:-"false"}
 
-export PACKAGE_BRANCH=${PACKAGE_BRANCH:-"branch-2.3.2-alti"}
-DEBUG_MAVEN=${DEBUG_MAVEN:-"false"}
+export PACKAGE_BRANCH=${PACKAGE_BRANCH:-"sap-branch-3.0.0-alti"}
+DEBUG_MAVEN=${DEBUG_MAVEN:-"true"}
 
 
 
@@ -144,6 +144,16 @@ else
   exit -9
 fi
 
+hive_profile_str=""
+if [[ $SPARK_HIVE_VERSION == 1.2.* ]] ; then
+  hive_profile_str="-Phive-1.2"
+elif [[ $SPARK_HIVE_VERSION == 2.3.* ]] ; then
+  hive_profile_str="-Phive-2.3"
+else
+  echo "fatal - Unrecognize hive version $SPARK_HIVE_VERSION, can't continue, exiting, no cleanup"
+  exit -9
+fi
+
 # TODO: This needs to align with Maven settings.xml, however, Maven looks for
 # -SNAPSHOT in pom.xml to determine which repo to use. This creates a chain reaction on 
 # legacy pom.xml design on other application since they are not implemented in the Maven way.
@@ -158,13 +168,14 @@ fi
 
 DEBUG_MAVEN=${DEBUG_MAVEN:-"false"}
 if [ "x${DEBUG_MAVEN}" = "xtrue" ] ; then
-  mvn_cmd="mvn -U -X $hadoop_profile_str -Phive-thriftserver -Phadoop-provided -Phive-provided -Psparkr -Pyarn -Pkinesis-asl -DskipTests install"
+  mvn_cmd="mvn -U -X $hadoop_profile_str $hive_profile_str -Phive-thriftserver -Phadoop-provided -Phive-provided -Psparkr -Pyarn -Pkinesis-asl -DskipTests install"
 else
-  mvn_cmd="mvn -U $hadoop_profile_str -Phive-thriftserver -Phadoop-provided -Phive-provided -Psparkr -Pyarn -Pkinesis-asl -DskipTests install"
+  mvn_cmd="mvn -U $hadoop_profile_str $hive_profile_str -Phive-thriftserver -Phadoop-provided -Phive-provided -Psparkr -Pyarn -Pkinesis-asl -DskipTests install"
 fi
 
 echo "$mvn_cmd"
-$mvn_cmd
+DATE_STRING=`date +%Y%m%d%H%M%S`
+$mvn_cmd --log-file mvnbuild_${DATE_STRING}.log
 
 if [ $? -ne "0" ] ; then
   echo "fail - spark build failed!"
