@@ -1,0 +1,6 @@
+imports dslVersion:"1.2", {
+  targetRootDir id:"default",{
+    artifactFile "jline:jline:jar:2.14.6"
+    artifactFile "org.apache.felix:maven-bundle-plugin:jar:4.2.0"
+  }
+}
