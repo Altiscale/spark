@@ -49,10 +49,6 @@ export PRODUCTION_RELEASE=${PRODUCTION_RELEASE:-"false"}
 export PACKAGE_BRANCH=${PACKAGE_BRANCH:-"sap-branch-3.0.0-alti"}
 DEBUG_MAVEN=${DEBUG_MAVEN:-"true"}
 
-
-
-
-
 env | sort
 
 if [ "x${PACKAGE_BRANCH}" = "x" ] ; then
@@ -84,7 +80,6 @@ else
   echo "ok - applying customized hive version $SPARK_HIVE_VERSION"
 fi
 
-
 echo "ok - building Spark in directory $(pwd)"
 echo "ok - building assembly with HADOOP_VERSION=$SPARK_HADOOP_VERSION HIVE_VERSION=$SPARK_HIVE_VERSION scala=scala-${SCALA_VERSION}"
 
@@ -108,7 +103,6 @@ rm -f ./sbin/*mesos*.sh
 rm -f ./conf/slaves
 
 env | sort
-
 
 # PURGE LOCAL CACHE for clean build
 # mvn dependency:purge-local-repository
@@ -166,11 +160,19 @@ fi
 #   mvn_release_flag="-Psnapshots"
 # fi
 
+# Apply localizaed nexus settings.xml to point to nexus
+mvn_settings=""
+if [ -f /opt/mvn3.3.9/conf/settings.xml ] ; then
+  mvn_settings="--settings /opt/mvn3.3.9/conf/settings.xml"
+else
+  echo "warn - you are relying on ~/.m2/settings.xml or the settings.xml provided by maven package!"
+fi
+
 DEBUG_MAVEN=${DEBUG_MAVEN:-"false"}
 if [ "x${DEBUG_MAVEN}" = "xtrue" ] ; then
-  mvn_cmd="mvn -U -X $hadoop_profile_str $hive_profile_str -Pmaven-repo -Phive-thriftserver -Phadoop-provided -Phive-provided -Psparkr -Pyarn -Pkinesis-asl -DskipTests install"
+  mvn_cmd="mvn -U -X $mvn_settings $hadoop_profile_str $hive_profile_str -Pmaven-repo -Phive-thriftserver -Phadoop-provided -Phive-provided -Psparkr -Pyarn -Pkinesis-asl -DskipTests install"
 else
-  mvn_cmd="mvn -U $hadoop_profile_str $hive_profile_str -Pmaven-repo -Phive-thriftserver -Phadoop-provided -Phive-provided -Psparkr -Pyarn -Pkinesis-asl -DskipTests install"
+  mvn_cmd="mvn -U $mvn_settings $hadoop_profile_str $hive_profile_str -Pmaven-repo -Phive-thriftserver -Phadoop-provided -Phive-provided -Psparkr -Pyarn -Pkinesis-asl -DskipTests install"
 fi
 
 echo "$mvn_cmd"
