@@ -43,7 +43,8 @@ export BUILD_TIMEOUT=${BUILD_TIMEOUT:-"86400"}
 export BUILD_ROOT=${BUILD_ROOT:-"centos6.5-x86_64"}
 export BUILD_TIME=$(date +%Y%m%d%H%M)
 # Customize build OPTS for MVN
-export MAVEN_OPTS=${MAVEN_OPTS:-"-Xmx8192m -XX:MaxPermSize=4096m"}
+export MAVEN_OPTS=${MAVEN_OPTS:-"-XX:CompressedClassSpaceSize=1024m -Xmx12288m -XX:MaxPermSize=2048m"}
+echo "ok - MAVEN_OPTS is set to $MAVEN_OPTS"
 export PRODUCTION_RELEASE=${PRODUCTION_RELEASE:-"false"}
 
 export PACKAGE_BRANCH=${PACKAGE_BRANCH:-"sap-branch-3.0.0-alti"}
