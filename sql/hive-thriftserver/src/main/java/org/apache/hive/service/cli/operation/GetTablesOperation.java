@@ -46,7 +46,7 @@ public class GetTablesOperation extends MetadataOperation {
   private final String schemaName;
   private final String tableName;
   private final List<String> tableTypes = new ArrayList<String>();
-  private final RowSet rowSet;
+  protected final RowSet rowSet;
   private final TableTypeMapping tableTypeMapping;
 
 
@@ -64,8 +64,8 @@ public class GetTablesOperation extends MetadataOperation {
     this.catalogName = catalogName;
     this.schemaName = schemaName;
     this.tableName = tableName;
-    String tableMappingStr = getParentSession().getHiveConf()
-        .getVar(HiveConf.ConfVars.HIVE_SERVER2_TABLE_TYPE_MAPPING);
+    String tableMappingStr = getParentSession().getHiveConf().
+        getVar(HiveConf.ConfVars.HIVE_SERVER2_TABLE_TYPE_MAPPING);
     tableTypeMapping =
         TableTypeMappingFactory.getTableTypeMapping(tableMappingStr);
     if (tableTypes != null) {

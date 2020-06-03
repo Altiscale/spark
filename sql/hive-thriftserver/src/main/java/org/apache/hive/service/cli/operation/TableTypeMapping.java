@@ -27,18 +27,18 @@ public interface TableTypeMapping {
    * @param clientTypeName
    * @return
    */
-  String mapToHiveType(String clientTypeName);
+  public String mapToHiveType (String clientTypeName);
 
   /**
    * Map hive's table type name to client's table type
-   * @param hiveTypeName
+   * @param clientTypeName
    * @return
    */
-  String mapToClientType(String hiveTypeName);
+  public String mapToClientType (String hiveTypeName);
 
   /**
    * Get all the table types of this mapping
    * @return
    */
-  Set<String> getTableTypeNames();
+  public Set<String> getTableTypeNames();
 }

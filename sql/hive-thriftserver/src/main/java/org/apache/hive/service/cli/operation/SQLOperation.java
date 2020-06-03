@@ -42,6 +42,7 @@ import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.parse.VariableSubstitution;
 import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
+import org.apache.hadoop.hive.ql.session.OperationLog;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.hive.serde2.SerDe;
@@ -273,6 +274,18 @@ public class SQLOperation extends ExecuteStatementOperation {
     }
   }
 
+  protected void registerCurrentOperationLog() {
+    if (isOperationLogEnabled) {
+      if (operationLog == null) {
+        LOG.warn("Failed to get current OperationLog object of Operation: " +
+            getHandle().getHandleIdentifier());
+        isOperationLogEnabled = false;
+        return;
+      }
+      OperationLog.setCurrentOperationLog(operationLog);
+    }
+  }
+
   private void cleanup(OperationState state) throws HiveSQLException {
     setState(state);
     if (shouldRunAsync()) {
@@ -313,7 +326,7 @@ public class SQLOperation extends ExecuteStatementOperation {
     return resultSchema;
   }
 
-  private final transient List<Object> convey = new ArrayList<Object>();
+  private transient final List<Object> convey = new ArrayList<Object>();
 
   @Override
   public RowSet getNextRowSet(FetchOrientation orientation, long maxRows) throws HiveSQLException {
@@ -443,7 +456,7 @@ public class SQLOperation extends ExecuteStatementOperation {
   private HiveConf getConfigForOperation() throws HiveSQLException {
     HiveConf sqlOperationConf = getParentSession().getHiveConf();
     if (!getConfOverlay().isEmpty() || shouldRunAsync()) {
-      // clone the parent session config for this query
+      // clone the partent session config for this query
       sqlOperationConf = new HiveConf(sqlOperationConf);
 
       // apply overlay query specific settings, if any

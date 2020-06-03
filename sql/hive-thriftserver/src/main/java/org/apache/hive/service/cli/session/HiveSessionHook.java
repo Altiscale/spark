@@ -18,29 +18,20 @@
 
 package org.apache.hive.service.cli.session;
 
-import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.ql.hooks.Hook;
+import org.apache.hive.service.cli.HiveSQLException;
+
 /**
- * HiveSessionHookContext.
- * Interface passed to the HiveServer2 session hook execution. This enables
- * the hook implementation to accesss session config, user and session handle
+ * HiveSessionHook.
+ * HiveServer2 session level Hook interface. The run method is executed
+ *  when session manager starts a new session
+ *
  */
-public interface HiveSessionHookContext {
+public interface HiveSessionHook extends Hook {
 
   /**
-   * Retrieve session conf
-   * @return
+   * @param sessionHookContext context
+   * @throws HiveSQLException
    */
-  public HiveConf getSessionConf();
-
-  /**
-   * The get the username starting the session
-   * @return
-   */
-  public String getSessionUser();
-
-  /**
-   * Retrieve handle for the session
-   * @return
-   */
-  public String getSessionHandle();
+  public void run(HiveSessionHookContext sessionHookContext) throws HiveSQLException;
 }

@@ -18,6 +18,7 @@
 
 package org.apache.hive.service.cli.operation;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -39,7 +40,7 @@ import org.apache.hive.service.cli.session.HiveSession;
  */
 public abstract class MetadataOperation extends Operation {
 
-  protected static final String DEFAULT_HIVE_CATALOG = "";
+  public static final String DEFAULT_HIVE_CATALOG = "";
   protected static TableSchema RESULT_SET_SCHEMA;
   private static final char SEARCH_STRING_ESCAPE = '\\';
 

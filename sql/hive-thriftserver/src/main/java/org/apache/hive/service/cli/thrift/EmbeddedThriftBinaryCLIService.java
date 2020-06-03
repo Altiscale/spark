@@ -16,31 +16,33 @@
  * limitations under the License.
  */
 
-package org.apache.hive.service.cli.session;
+package org.apache.hive.service.cli.thrift;
 
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hive.service.cli.CLIService;
+import org.apache.hive.service.cli.ICLIService;
+
+
 /**
- * HiveSessionHookContext.
- * Interface passed to the HiveServer2 session hook execution. This enables
- * the hook implementation to accesss session config, user and session handle
+ * EmbeddedThriftBinaryCLIService.
+ *
  */
-public interface HiveSessionHookContext {
+public class EmbeddedThriftBinaryCLIService extends ThriftBinaryCLIService {
 
-  /**
-   * Retrieve session conf
-   * @return
-   */
-  public HiveConf getSessionConf();
+  public EmbeddedThriftBinaryCLIService() {
+    super(new CLIService(null));
+    isEmbedded = true;
+    HiveConf.setLoadHiveServer2Config(true);
+  }
 
-  /**
-   * The get the username starting the session
-   * @return
-   */
-  public String getSessionUser();
+  @Override
+  public synchronized void init(HiveConf hiveConf) {
+    cliService.init(hiveConf);
+    cliService.start();
+    super.init(hiveConf);
+  }
 
-  /**
-   * Retrieve handle for the session
-   * @return
-   */
-  public String getSessionHandle();
+  public ICLIService getService() {
+    return cliService;
+  }
 }
