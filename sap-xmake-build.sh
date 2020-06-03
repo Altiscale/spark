@@ -46,7 +46,7 @@ export BUILD_TIME=$(date +%Y%m%d%H%M)
 export MAVEN_OPTS=${MAVEN_OPTS:-"-Xmx2048m -XX:MaxPermSize=1024m"}
 export PRODUCTION_RELEASE=${PRODUCTION_RELEASE:-"false"}
 
-export PACKAGE_BRANCH=${PACKAGE_BRANCH:-"sap-branch-2.3.2-alti-SPARK-24570-patch"}
+export PACKAGE_BRANCH=${PACKAGE_BRANCH:-"sap-branch-2.3.2-alti"}
 DEBUG_MAVEN=${DEBUG_MAVEN:-"false"}
 
 
