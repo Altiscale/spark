@@ -164,7 +164,8 @@ else
 fi
 
 echo "$mvn_cmd"
-$mvn_cmd
+DATE_STRING=`date +%Y%m%d%H%M%S`
+$mvn_cmd --log-file mvnbuild_${DATE_STRING}.log
 
 if [ $? -ne "0" ] ; then
   echo "fail - spark build failed!"
@@ -184,7 +185,6 @@ export RPM_DESCRIPTION="Apache Spark ${SPARK_VERSION}\n\n${DESCRIPTION}"
 export RPM_YARNSHUFFLE_NAME=`echo alti-spark-${SPARK_VERSION}-yarn-shuffle`
 export RPM_YARNSHUFFLE_DESCRIPTION="The Apache Spark ${SPARK_VERSION} pluggable spark_shuffle RPM to install spark_shuffle JAR compiled by maven\n\n${DESCRIPTION}\nThis package contains the yarn-shuffle JAR to enable spark_shuffle on YARN node managers when it is added to NM classpath."
 
-DATE_STRING=`date +%Y%m%d%H%M%S`
 GIT_REPO="https://github.com/Altiscale/spark"
 INSTALL_DIR="${curr_dir}/spark_rpmbuild"
 mkdir --mode=0755 -p ${INSTALL_DIR}
