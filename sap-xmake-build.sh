@@ -26,9 +26,9 @@ export HIVE_VERSION=${HIVE_VERSION:-"2.1.1"}
 export SPARK_PKG_NAME=${SPARK_PKG_NAME:-"spark"}
 export SPARK_GID=${SPARK_GID:-"411460017"}
 export SPARK_UID=${SPARK_UID:-"411460024"}
-# XMAKE_PROJECT_VERSION derived from cfg/VERSION file
-RELEASE=$(echo $XMAKE_PROJECT_VERSION | cut -d- -f2)
-export SPARK_VERSION=$(echo $XMAKE_PROJECT_VERSION | cut -d- -f1)
+# XMAKE_PROJECT_BASE_VERSION derived from cfg/VERSION file
+RELEASE=$(echo $XMAKE_PROJECT_BASE_VERSION | cut -d- -f2)
+export SPARK_VERSION=$(echo $XMAKE_PROJECT_BASE_VERSION | cut -d- -f1)
 export SCALA_VERSION=${SCALA_VERSION:-"2.11"}
 
 if [[ $SPARK_VERSION == 2.* ]] ; then
