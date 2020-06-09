@@ -354,9 +354,10 @@ if [ $? -ne 0 ] ; then
 fi
 popd
 
-SAP_RPM_NAME="sap-${RPM_NAME}-${RELEASE}.noarch"
+SAP_RPM_NAME="sap-alti-spark-${SPARK_VERSION}-${RELEASE}.noarch"
 mv "${RPM_DIR}${RPM_NAME}-${SPARK_VERSION}-${RELEASE}.noarch.rpm" "${RPM_DIR}${SAP_RPM_NAME}.rpm"
-echo "ok - spark $RPM_NAME and RPM completed successfully!"
+echo "ok - spark $RPM_NAME completed successfully and created RPM ${RPM_DIR}${SAP_RPM_NAME}.rpm for export!"
+ls -al "${RPM_DIR}${SAP_RPM_NAME}.rpm"
 
 echo "ok - build completed successfully!"
 
