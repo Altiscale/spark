@@ -194,7 +194,7 @@ mkdir --mode=0755 -p ${INSTALL_DIR}
 export RPM_DIR="${INSTALL_DIR}/rpm/"
 mkdir -p --mode 0755 ${RPM_DIR}
 
-echo "Packaging spark yarn shuffle rpm with name ${RPM_NAME} with version ${SPARK_VERSION}-${DATE_STRING}"
+echo "Packaging spark yarn shuffle rpm with name ${RPM_NAME} with version ${SPARK_VERSION}-${RELEASE}"
 
 ##########################
 # Spark YARN SHUFFLE RPM #
@@ -355,7 +355,7 @@ fi
 popd
 
 SAP_RPM_NAME="sap-${RPM_NAME}-${RELEASE}.noarch"
-mv "${RPM_DIR}${RPM_NAME}-${SPARK_VERSION}-${DATE_STRING}.noarch.rpm" "${RPM_DIR}${SAP_RPM_NAME}.rpm"
+mv "${RPM_DIR}${RPM_NAME}-${SPARK_VERSION}-${RELEASE}.noarch.rpm" "${RPM_DIR}${SAP_RPM_NAME}.rpm"
 echo "ok - spark $RPM_NAME and RPM completed successfully!"
 
 echo "ok - build completed successfully!"
