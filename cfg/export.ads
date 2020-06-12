@@ -7,7 +7,7 @@ artifacts builderVersion: "1.1", {
     }
 
     artifact "spark-shuffle", {
-      file "$gendir/src/spark_rpmbuild/rpm/alti-spark-2.3.2-yarn-shuffle.rpm"
+      file "$gendir/src/spark_rpmbuild/rpm/sap-alti-spark-2.3.2-yarn-shuffle-${baseversion}.noarch.rpm"
     }
   }
 }

@@ -199,7 +199,7 @@ echo "Packaging spark yarn shuffle rpm with name ${RPM_NAME} with version ${SPAR
 ##########################
 # Spark YARN SHUFFLE RPM #
 ##########################
-export RPM_BUILD_DIR=${INSTALL_DIR}/opt/alti-spark-${SPARK_VERSION}
+export RPM_BUILD_DIR=${INSTALL_DIR}/tmp/alti-spark-${SPARK_VERSION}
 # Generate RPM based on where spark artifacts are placed from previous steps
 rm -rf "${RPM_BUILD_DIR}"
 mkdir --mode=0755 -p "${RPM_BUILD_DIR}"
@@ -227,7 +227,7 @@ fpm --verbose \
 -t rpm \
 -n ${RPM_YARNSHUFFLE_NAME} \
 -v ${SPARK_VERSION}  \
---iteration ${DATE_STRING} \
+--iteration ${RELEASE} \
 --rpm-user root \
 --rpm-group root \
 --template-value version=$SPARK_VERSION \
@@ -235,7 +235,7 @@ fpm --verbose \
 --template-value pkgname=$RPM_YARNSHUFFLE_NAME \
 --rpm-auto-add-directories \
 -C ${INSTALL_DIR} \
-opt
+tmp/alti-spark-$SPARK_VERSION/common=/opt/alti-spark-2.3.2/
 
 if [ $? -ne 0 ] ; then
   echo "FATAL: spark $RPM_YARNSHUFFLE_NAME rpm build fail!"
@@ -243,9 +243,13 @@ if [ $? -ne 0 ] ; then
   exit -1
 fi
 
-mv "${RPM_DIR}${RPM_YARNSHUFFLE_NAME}-${SPARK_VERSION}-${DATE_STRING}.noarch.rpm" "${RPM_DIR}${RPM_YARNSHUFFLE_NAME}.rpm"
+# The output file will be sap-alti-spark-2.3.2-yarn-shuffle-2.3.2-yyyymmddHHMMSS.noarch.rpm
+SAP_SHUFFLE_RPM_NAME="sap-${RPM_YARNSHUFFLE_NAME}-${SPARK_VERSION}-${RELEASE}.noarch"
+echo "ok - spark $RPM_YARNSHUFFLE_NAME completed successfully and created RPM ${RPM_DIR}${SAP_SHUFFLE_RPM_NAME}.rpm for export!"
+mv "${RPM_DIR}${RPM_YARNSHUFFLE_NAME}-${SPARK_VERSION}-${RELEASE}.noarch.rpm" "${RPM_DIR}${SAP_SHUFFLE_RPM_NAME}.rpm"
+ls -al "${RPM_DIR}${SAP_SHUFFLE_RPM_NAME}.rpm"
 
-echo "ok - spark $RPM_YARNSHUFFLE_NAME and RPM completed successfully!"
+echo "ok - spark $SAP_SHUFFLE_RPM_NAME and RPM completed successfully!"
 
 popd
 
